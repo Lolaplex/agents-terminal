@@ -1,0 +1,32 @@
+# Sandbox-local OpenShell gateway (agents-terminal / agents-sandbox).
+# Paths are rewritten by start-openshell-gateway.sh at runtime.
+
+[openshell]
+version = 1
+
+[openshell.gateway]
+log_level = "info"
+
+[openshell.gateway.tls]
+cert_path = "{{TLS_DIR}}/server/tls.crt"
+key_path = "{{TLS_DIR}}/server/tls.key"
+client_ca_path = "{{TLS_DIR}}/ca.crt"
+require_client_auth = false
+
+[openshell.gateway.gateway_jwt]
+signing_key_path = "{{TLS_DIR}}/jwt/signing.pem"
+public_key_path = "{{TLS_DIR}}/jwt/public.pem"
+kid_path = "{{TLS_DIR}}/jwt/kid"
+gateway_id = "openshell"
+ttl_secs = 0
+
+[openshell.gateway.auth]
+allow_unauthenticated_users = true
+
+[openshell.gateway.mtls_auth]
+enabled = false
+
+[openshell.drivers.docker]
+guest_tls_ca = "{{TLS_DIR}}/ca.crt"
+guest_tls_cert = "{{TLS_DIR}}/client/tls.crt"
+guest_tls_key = "{{TLS_DIR}}/client/tls.key"
