@@ -4,12 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agents-terminal"
-version = "0.1.0"
+version = "0.0.1"
 description = "Jailed terminal CLI for agent computer-use (policy + driver)"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Lolaplex" }]
 requires-python = ">=3.10"
 dependencies = []
+keywords = ["agents", "terminal", "sandbox", "openshell", "jail", "computer-use", "cli", "coding-assistant"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Emulators",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/Lolaplex/agents-terminal"
+Repository = "https://github.com/Lolaplex/agents-terminal"
+"Bug Tracker" = "https://github.com/Lolaplex/agents-terminal/issues"
 
 [project.scripts]
 agents-terminal = "agents_terminal.__main__:main"
