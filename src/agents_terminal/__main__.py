@@ -1,4 +1,4 @@
-﻿"""CLI entrypoint for agents-terminal."""
+"""CLI entrypoint for agents-terminal."""
 
 from __future__ import annotations
 
@@ -34,6 +34,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if not getattr(args, "help_json", False):
+        try:
+            from .updates import check_for_updates
+            check_for_updates("agents-terminal", __version__)
+        except Exception:
+            pass
     if getattr(args, "help_json", False):
         print(json.dumps(_help_json(), indent=2))
         return 0
