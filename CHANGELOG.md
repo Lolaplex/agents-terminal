@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Forward `GITHUB_TOKEN`, `GH_TOKEN`, and git author env vars by default in terminal policy.
+- Support `AGENTS_TERMINAL_ENV_ALLOW`, `AGENTS_TERMINAL_EXTRA_ENV`, and `AGENTS_TERMINAL_ENV_PASSTHROUGH` for flexible environment forwarding.
+
 ## [0.0.2] - 2026-09-05
 
 ### Added

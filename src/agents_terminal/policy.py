@@ -8,7 +8,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-_DEFAULT_ENV_ALLOW = ("PATH", "SYSTEMROOT", "TEMP", "TMP", "WINDIR", "HOME", "USER")
+_DEFAULT_ENV_ALLOW = (
+    "PATH",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "WINDIR",
+    "HOME",
+    "USER",
+    "SHELL",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_EMAIL",
+    "GIT_COMMITTER_NAME",
+    "GIT_COMMITTER_EMAIL",
+)
 
 
 @dataclass
@@ -31,7 +49,13 @@ class Policy:
             p = Path(raw_path).expanduser()
             if p.is_file():
                 data = json.loads(p.read_text(encoding="utf-8"))
-        allow = data.get("env_allow") or list(_DEFAULT_ENV_ALLOW)
+        allow = data.get("env_allow")
+        if allow is None:
+            extra_env = os.environ.get("AGENTS_TERMINAL_ENV_ALLOW") or os.environ.get("AGENTS_TERMINAL_EXTRA_ENV", "")
+            base = list(_DEFAULT_ENV_ALLOW)
+            if extra_env.strip():
+                base.extend([x.strip() for x in extra_env.split(",") if x.strip()])
+            allow = base
         driver = str(data.get("driver") or os.environ.get("AGENTS_TERMINAL_DRIVER", "auto")).strip().lower()
         return cls(
             cwd=str(data["cwd"]) if data.get("cwd") else None,
@@ -55,6 +79,9 @@ class Policy:
         return None
 
     def filtered_env(self) -> dict[str, str]:
+        passthrough = os.environ.get("AGENTS_TERMINAL_ENV_PASSTHROUGH", "").strip().lower() in ("1", "true", "yes")
+        if passthrough:
+            return dict(os.environ)
         out: dict[str, str] = {}
         for key in self.env_allow:
             val = os.environ.get(key)
