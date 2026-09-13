@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support `AGENTS_TERMINAL_ENV_ALLOW`, `AGENTS_TERMINAL_EXTRA_ENV`, and `AGENTS_TERMINAL_ENV_PASSTHROUGH` for flexible environment forwarding.
 - Default execution CWD to resolved `workspace_dir()` (`AGENTS_WORKSPACE_DIR` or `~/.agents/workspace`) with automatic directory creation.
 
+### Removed
+- GitHub Release is no longer cut automatically on `v*.*.*` tags (manual `gh release create` from CHANGELOG instead).
 
 ## [0.0.2] - 2026-09-05
 
