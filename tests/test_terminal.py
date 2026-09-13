@@ -41,6 +41,15 @@ class TestPolicy(unittest.TestCase):
             env = pol.filtered_env()
             self.assertEqual(env.get("ANY_SECRET"), "hello")
 
+    def test_workspace_dir_resolution(self):
+        import os
+        from pathlib import Path
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"AGENTS_WORKSPACE_DIR": "/custom/workspace"}, clear=True):
+            pol = Policy.load()
+            self.assertEqual(pol.workspace_dir(), Path("/custom/workspace").resolve())
+
+
 
 class TestDriver(unittest.TestCase):
     def test_run_argv_echo(self):

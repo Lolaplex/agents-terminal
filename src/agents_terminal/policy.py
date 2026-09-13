@@ -92,7 +92,11 @@ class Policy:
     def workspace_dir(self) -> Path:
         if self.openshell_workspace:
             return Path(self.openshell_workspace).expanduser().resolve()
+        workspace_env = os.environ.get("AGENTS_WORKSPACE_DIR", "").strip()
+        if workspace_env:
+            return Path(workspace_env).expanduser().resolve()
         agents_home = os.environ.get("AGENTS_HOME", "").strip()
         if agents_home:
-            return (Path(agents_home) / "terminal-workspace").resolve()
-        return Path.cwd().resolve()
+            return (Path(agents_home) / "workspace").resolve()
+        return (Path.home() / ".agents" / "workspace").resolve()
+

@@ -1,4 +1,4 @@
-﻿"""Subprocess driver under terminal policy."""
+"""Subprocess driver under terminal policy."""
 
 from __future__ import annotations
 
@@ -133,8 +133,14 @@ def run_argv(
     if denied:
         return RunResult(argv=cmd, returncode=1, stdout="", stderr=denied, denied=denied)
 
+    from pathlib import Path
     env = pol.filtered_env()
-    cwd = pol.cwd or os.getcwd()
+    cwd_path = Path(pol.cwd).expanduser().resolve() if pol.cwd else pol.workspace_dir()
+    try:
+        cwd_path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    cwd = str(cwd_path)
     kernel32, job = _win_job_handle()
     creationflags = 0
     if sys.platform == "win32":
