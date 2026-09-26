@@ -1,107 +1,92 @@
-# agents-terminal
-
-<p align="left">
+<p align="center">
   <a href="https://github.com/Lolaplex/agents-terminal/releases"><img src="https://img.shields.io/badge/version-0.0.3-blue.svg?style=flat-square" alt="Version 0.0.3"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://pypi.org/project/agents-terminal/"><img src="https://img.shields.io/pypi/v/agents-terminal.svg?style=flat-square" alt="PyPI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
 </p>
 
-**Policy-bound jailed terminal CLI for agent execution (`call_job mcp.terminal`).**  
-Harness never shells directly; this package owns the execution jail, driver routing, and environment sanitization.
-
----
+<p align="center">
+  <strong>Policy-bound jailed terminal for agent execution.</strong><br>
+  argv in, stripped env out. No MCP server.
+</p>
 
 ## Quickstart
-
-### 1-Step Setup
 
 ```bash
 pip install agents-terminal
 ```
 
-### 2. Agent-Driven Setup (Zero Friction)
+There is no `init`. The harness calls `agents-terminal run`. Nothing is written into IDE configs.
 
 > [!TIP]
-> **🤖 Agent-Driven Setup (Zero Friction):**  
-> Simply tell your coding agent: **"Install and use agents-terminal for jailed shell execution."**  
-> The agent installs the package and routes terminal execution through `python -m agents_terminal`.
+> **🤖 Agent-Driven Setup:**
+> Give your coding agent **this repo** (clone or URL), then tell it to **"install agents-terminal and run commands through it."**
 
-*Source checkouts can also be installed and managed using [vand](https://github.com/Lolaplex/vand).*
-
----
-
-## Why `agents-terminal`?
-
-Letting autonomous coding agents execute arbitrary shell commands directly on host machines creates severe risks: leaked environment secrets (API keys, SSH credentials), orphan background processes, and uncontained filesystem modifications.
-
-**`agents-terminal` applies the Lolaplex philosophy:**
-- **Zero Shell Injection**: Commands are passed as strict argument vectors (`argv`), completely bypassing shell interpreter parsing vulnerabilities (`bash -c`, `sh -c`, `powershell.exe -Command`).
-- **Strict Environment Stripping**: Only an explicit, minimal allowlist of standard environment variables (`PATH`, `TEMP`, `HOME`, safe Git/GitHub author tokens) is inherited. Sensitive host secrets are stripped before execution.
-- **Process Tree Cleanup**: Subprocess execution uses OS job objects / process group killing to ensure descendant processes are terminated on timeout.
-- **Pluggable Drivers**: Seamlessly switches between a portable local `subprocess` jail and an isolated `openshell` container sandbox.
+Source checkouts can also be installed and managed with [vand](https://github.com/Lolaplex/vand).
 
 ---
 
-## Architecture & Flow
+## What it does
 
-```text
- ┌─────────────────────────────────────────────────────────────┐
- │                     CODING AGENT / IDE                      │
- │       agents-harness · Claude Code · Custom Agents          │
- └──────────────────────────────┬──────────────────────────────┘
-                                │  argv vector (no raw shell string)
-                                ▼
- ┌─────────────────────────────────────────────────────────────┐
- │                      AGENTS-TERMINAL                        │
- │    Policy Enforcement · Env Stripper · Timeout Supervisor   │
- └──────────────┬───────────────────────────────┬──────────────┘
-                │                               │
-                ▼ (auto / configured)           ▼
- ┌─────────────────────────────┐ ┌─────────────────────────────┐
- │      SUBPROCESS DRIVER      │ │      OPENSHELL DRIVER       │
- │   OS Job Object / Timeout   │ │   Containerized Supervisor  │
- │   Stripped Host Environment │ │   Jailed Linux / Docker     │
- └─────────────────────────────┘ └─────────────────────────────┘
-```
+Agents do not get a shell string. `run` takes an argv vector after `--`, so the host shell never parses the command.
+
+The child inherits an allowlist, not the parent environment. Default names: `PATH`, `HOME`, `USER`, `SHELL`, `TEMP` / `TMP`, locale (`LANG`, `LC_ALL`, `TERM`), Windows roots (`SYSTEMROOT`, `WINDIR`), git author/committer, `GITHUB_TOKEN`, `GH_TOKEN`. Anything else is dropped unless you extend the list.
+
+On timeout the process tree is killed (job object / process group). Working directory defaults to `AGENTS_WORKSPACE_DIR` or `~/.agents/workspace`, created if missing.
 
 ---
 
-## Usage & Drivers
-
-Machine catalog: `python -m agents_terminal --help-json`
-
-```bash
-# Jailed execution with default policy
-agents-terminal run -- echo hello
-```
-
-### Drivers
+## Drivers
 
 | Driver | When | Backend |
 | :--- | :--- | :--- |
-| `subprocess` | Windows / macOS stand-in, fallback | Environment stripping, directory confinement, process tree timeout |
-| `openshell` | Linux / Docker / OpenShell container | `openshell sandbox create` containerized supervisor |
-| `auto` (default) | Picks `openshell` if available on PATH, otherwise falls back to `subprocess` |
+| `subprocess` | Windows / macOS stand-in, and the fallback | Allowlisted env, directory confinement, process-tree timeout |
+| `openshell` | Linux / Docker / OpenShell on `PATH` | `openshell sandbox create` |
+| `auto` (default) | Starting point | `openshell` when that binary is on `PATH` (or inside WSL on Windows), else `subprocess` |
 
-Set `AGENTS_TERMINAL_DRIVER=openshell|subprocess|auto` to configure the active driver.
+Set `AGENTS_TERMINAL_DRIVER=openshell|subprocess|auto`.
 
 ---
 
-## Environment & Policy Configuration
+## Environment
 
 | Variable | Description |
 | :--- | :--- |
 | `AGENTS_TERMINAL_DRIVER` | `auto` (default), `subprocess`, or `openshell` |
-| `AGENTS_WORKSPACE_DIR` | Working directory for commands (default: `~/.agents/workspace`) |
-| `AGENTS_TERMINAL_POLICY` | Path to a custom JSON policy configuration file |
-| `AGENTS_TERMINAL_ENV_ALLOW` | Comma-separated list of additional environment variables to pass through |
+| `AGENTS_WORKSPACE_DIR` | Working directory (default `~/.agents/workspace`) |
+| `AGENTS_TERMINAL_POLICY` | Path to a JSON policy file (`driver`, `env_allow`, `timeout_sec`, `cwd`, …) |
+| `AGENTS_TERMINAL_ENV_ALLOW` | Extra names, comma-separated, appended to the default allowlist. Alias: `AGENTS_TERMINAL_EXTRA_ENV` |
+| `AGENTS_TERMINAL_ENV_PASSTHROUGH` | `1` / `true` / `yes` copies the full parent environment and skips the allowlist |
 
 ---
 
-## Testing & Verification
+## CLI
 
-Run the test suite:
+One command. No MCP. Machine-readable catalog: `python -m agents_terminal --help-json`.
+
+| Command | Purpose |
+| --- | --- |
+| `agents-terminal run -- <argv…>` | Run that argv under the policy. No shell |
+
+No subcommand prints help. Exit code is the child's exit code.
+
+```bash
+agents-terminal run -- echo hello
+```
+
+---
+
+## ABI
+
+Contract in [`abi/`](abi/):
+
+- [`WHY.md`](abi/WHY.md) — argv and an allowlisted env
+- [`POLICY.md`](abi/POLICY.md) — drivers, env, workspace, timeout
+- [`CLI.md`](abi/CLI.md) — `run`
+
+---
+
+## Tests
 
 ```bash
 python -m unittest discover -s tests -v
@@ -111,4 +96,4 @@ python -m unittest discover -s tests -v
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).
