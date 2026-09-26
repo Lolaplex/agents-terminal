@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- README documents the single `run` command, driver selection, and env allowlist including `AGENTS_TERMINAL_EXTRA_ENV` and `AGENTS_TERMINAL_ENV_PASSTHROUGH`.
+
 ## [0.0.3] - 2026-09-26
 
 ### Changed
