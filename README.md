@@ -76,6 +76,16 @@ agents-terminal run -- echo hello
 
 ---
 
+## ABI
+
+Contract in [`abi/`](abi/):
+
+- [`WHY.md`](abi/WHY.md) — argv and an allowlisted env
+- [`POLICY.md`](abi/POLICY.md) — drivers, env, workspace, timeout
+- [`CLI.md`](abi/CLI.md) — `run`
+
+---
+
 ## Tests
 
 ```bash

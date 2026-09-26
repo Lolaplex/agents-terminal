@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- ABI contract in `abi/` for policy, drivers, and the `run` command.
+
 ### Changed
 - README documents the single `run` command, driver selection, and env allowlist including `AGENTS_TERMINAL_EXTRA_ENV` and `AGENTS_TERMINAL_ENV_PASSTHROUGH`.
 
