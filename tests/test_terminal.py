@@ -1,4 +1,4 @@
-﻿"""Tests for agents-terminal policy and driver."""
+"""Tests for agents-terminal policy and driver."""
 
 from __future__ import annotations
 
@@ -15,6 +15,40 @@ class TestPolicy(unittest.TestCase):
     def test_check_request_denies_net(self):
         pol = Policy(net=False)
         self.assertEqual(pol.check_request(read=False, write=False, net=True), "net denied (no driver)")
+
+    def test_filtered_env_includes_github_token(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_secret", "RANDOM_VAR": "hidden"}, clear=True):
+            pol = Policy.load()
+            env = pol.filtered_env()
+            self.assertEqual(env.get("GITHUB_TOKEN"), "ghp_secret")
+            self.assertNotIn("RANDOM_VAR", env)
+
+    def test_filtered_env_extra_env(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"AGENTS_TERMINAL_EXTRA_ENV": "MY_CUSTOM_VAR,ANOTHER_VAR", "MY_CUSTOM_VAR": "val1"}, clear=True):
+            pol = Policy.load()
+            env = pol.filtered_env()
+            self.assertEqual(env.get("MY_CUSTOM_VAR"), "val1")
+
+    def test_filtered_env_passthrough(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"AGENTS_TERMINAL_ENV_PASSTHROUGH": "1", "ANY_SECRET": "hello"}, clear=True):
+            pol = Policy.load()
+            env = pol.filtered_env()
+            self.assertEqual(env.get("ANY_SECRET"), "hello")
+
+    def test_workspace_dir_resolution(self):
+        import os
+        from pathlib import Path
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"AGENTS_WORKSPACE_DIR": "/custom/workspace"}, clear=True):
+            pol = Policy.load()
+            self.assertEqual(pol.workspace_dir(), Path("/custom/workspace").resolve())
+
 
 
 class TestDriver(unittest.TestCase):
