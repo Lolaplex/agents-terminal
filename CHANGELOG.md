@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-09-26
+
 ### Added
 - ABI contract in `abi/` for policy, drivers, and the `run` command.
 
@@ -34,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dual drivers: `subprocess` fallback and `openshell` container isolation.
 - Structured JSON API (`--help-json`) and Cordis `call_job mcp.terminal`.
 
-[Unreleased]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/Lolaplex/agents-terminal/releases/tag/v0.0.2
