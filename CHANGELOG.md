@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - CI runs only on pull requests to `main`.
+- Refined README with full benchmark specification (architecture diagram, security rationale, environment configuration table, and testing instructions).
 
 ### Added
 - Forward `GITHUB_TOKEN`, `GH_TOKEN`, and git author env vars by default in terminal policy.
