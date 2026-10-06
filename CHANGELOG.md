@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-10-06
+
 ### Added
 - CLI (and MCP, when present) check PyPI at most once per day for a newer release and print one stderr / tool-response line (`uv tool upgrade …`). Disabled with `AGENTS_NO_UPDATE_CHECK=1` or when `CI` is set; offline/timeout stays silent.
 
@@ -39,7 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dual drivers: `subprocess` fallback and `openshell` container isolation.
 - Structured JSON API (`--help-json`) and Cordis `call_job mcp.terminal`.
 
-[Unreleased]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/Lolaplex/agents-terminal/releases/tag/v0.0.2
