@@ -64,13 +64,17 @@ Set `AGENTS_TERMINAL_DRIVER=openshell|subprocess|auto`.
 
 ## CLI
 
-One command. No MCP. Machine-readable catalog: `python -m agents_terminal --help-json`.
+No MCP server. Machine-readable catalog: `python -m agents_terminal --help-json`. Each command includes `side_effects`: `read-only` or `mutating`. See [`abi/METADATA.md`](abi/METADATA.md).
 
-| Command | Purpose |
-| --- | --- |
-| `agents-terminal run -- <argv…>` | Run that argv under the policy. No shell |
+| Command | Side effects | Purpose |
+| --- | --- | --- |
+| `agents-terminal list [PATH]` | read-only | List a directory inside the workspace root |
+| `agents-terminal read PATH [--offset N] [--limit N]` | read-only | Read a text file. `--offset` is the 1-based line |
+| `agents-terminal grep PATTERN [PATH]` | read-only | Search file contents. Alias: `search` |
+| `agents-terminal stat PATH` | read-only | File type, size, mode, and mtime |
+| `agents-terminal run -- <argv…>` | mutating | Run that argv under the policy. No shell |
 
-No subcommand prints help. Exit code is the child's exit code.
+Read-only commands do not spawn a process and cannot create, modify, or delete files. Missing `side_effects` means mutating. No subcommand prints help. For `run`, the exit code is the child's exit code.
 
 ```bash
 agents-terminal run -- echo hello
@@ -84,7 +88,8 @@ Contract in [`abi/`](abi/):
 
 - [`WHY.md`](abi/WHY.md) — argv and an allowlisted env
 - [`POLICY.md`](abi/POLICY.md) — drivers, env, workspace, timeout
-- [`CLI.md`](abi/CLI.md) — `run`
+- [`CLI.md`](abi/CLI.md) — `list`, `read`, `grep`, `stat`, `run`
+- [`METADATA.md`](abi/METADATA.md) — `side_effects`: `read-only` or `mutating`
 
 ---
 

@@ -20,8 +20,12 @@ A JSON policy `env_allow` array replaces the default list instead of appending.
 
 `AGENTS_TERMINAL_ENV_PASSTHROUGH=1|true|yes` copies the full parent environment and skips the allowlist.
 
+## Read-only root
+
+`list`, `read`, `grep` / `search`, and `stat` use `work_root()` and do not create it. That path is policy `cwd` when set, otherwise the workspace directory below. They do not go through the subprocess or OpenShell driver. Path rules are in [`CLI.md`](CLI.md). `run` is unchanged and remains the mutating command.
+
 ## Workspace and timeout
 
-Working directory: policy `cwd` or `openshell_workspace`, else `AGENTS_WORKSPACE_DIR`, else `AGENTS_HOME/workspace`, else `~/.agents/workspace`. The directory is created if missing.
+Working directory for `run`: policy `cwd` or `openshell_workspace`, else `AGENTS_WORKSPACE_DIR`, else `AGENTS_HOME/workspace`, else `~/.agents/workspace`. `run` creates that directory if it is missing. Read-only commands use the same path and do not create it.
 
 `timeout_sec` defaults to 60. On timeout the process tree is killed.

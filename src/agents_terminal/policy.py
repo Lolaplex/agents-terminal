@@ -89,6 +89,12 @@ class Policy:
                 out[key] = val
         return out
 
+    def work_root(self) -> Path:
+        """Directory ``run`` uses as its working directory. This does not create it."""
+        if self.cwd:
+            return Path(self.cwd).expanduser().resolve()
+        return self.workspace_dir()
+
     def workspace_dir(self) -> Path:
         if self.openshell_workspace:
             return Path(self.openshell_workspace).expanduser().resolve()

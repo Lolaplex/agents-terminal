@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Read-only commands `list`, `read`, `grep` (`search`), and `stat`. They observe the workspace root and cannot create, modify, delete, or spawn a process. `read` accepts `--offset` (1-based line) and `--limit`.
+- `--help-json` declares per-command side effects. Canonical field `commands.<name>.side_effects` is `read-only` or `mutating`. `mutates` and MCP `annotations.readOnlyHint` mirror that fact. `run` stays `mutating`. Missing `side_effects` metadata means mutating. See `abi/METADATA.md`.
+- Without `O_NOFOLLOW` or `dir_fd`, read-only commands fail closed: the real path must stay inside the root, and symlinks, junctions, and reparse points are rejected before an open. `stat` uses that same confinement.
+
 ## [0.0.5] - 2026-10-06
 
 ### Added
