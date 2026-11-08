@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass
 from typing import Sequence
 
-from .policy import Policy
+from .policy import Policy, refuse_workspace
 
 
 @dataclass
@@ -136,6 +136,9 @@ def run_argv(
     from pathlib import Path
     env = pol.filtered_env()
     cwd_path = Path(pol.cwd).expanduser().resolve() if pol.cwd else pol.workspace_dir()
+    locked = refuse_workspace(cwd_path, cmd)
+    if locked:
+        return RunResult(argv=cmd, returncode=1, stdout="", stderr=locked, denied=locked)
     try:
         cwd_path.mkdir(parents=True, exist_ok=True)
     except Exception:

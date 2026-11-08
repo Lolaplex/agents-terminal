@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- A set workspace refuses tool paths and working directories outside that root. Skills, modules, memory, traces, schedules, and the agent home stay reachable. An unset or blank workspace leaves commands unchanged.
+
 ### Added
 - Read-only commands `list`, `read`, `grep` (`search`), and `stat`. They observe the workspace root and cannot create, modify, delete, or spawn a process. `read` accepts `--offset` (1-based line) and `--limit`.
 - `--help-json` declares per-command side effects. Canonical field `commands.<name>.side_effects` is `read-only` or `mutating`. `mutates` and MCP `annotations.readOnlyHint` mirror that fact. `run` stays `mutating`. Missing `side_effects` metadata means mutating. See `abi/METADATA.md`.

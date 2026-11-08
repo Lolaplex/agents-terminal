@@ -12,7 +12,7 @@ from typing import Any
 from . import __version__
 from .driver import format_result
 from .manifest import help_json
-from .policy import Policy
+from .policy import Policy, refuse_workspace
 from .readonly import (
     DEFAULT_GREP_MAX,
     DEFAULT_READ_LIMIT,
@@ -70,9 +70,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _root() -> Path:
     try:
-        return Policy.load().work_root()
+        root = Policy.load().work_root()
     except (OSError, RuntimeError) as exc:
         raise ReadonlyError("invalid path") from exc
+    denial = refuse_workspace(root, ())
+    if denial:
+        raise ReadonlyError(denial)
+    return root
 
 
 def _emit(payload: dict[str, Any], text: str, *, as_json: bool, truncated: bool = False) -> int:
@@ -153,6 +157,9 @@ def main(argv: list[str] | None = None) -> int:
             print("run requires argv after --", file=sys.stderr)
             return 2
         result = run_command(raw)
+        if result.denied:
+            print(result.denied, file=sys.stderr)
+            return int(result.returncode)
         out = format_result(result)
         if out:
             print(out)

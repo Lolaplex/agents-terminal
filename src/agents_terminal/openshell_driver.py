@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .driver import RunResult
 from .openshell_policy import write_policy_file
-from .policy import Policy
+from .policy import Policy, refuse_workspace
 
 
 def openshell_available() -> bool:
@@ -95,6 +95,9 @@ def run_openshell(
         return RunResult(argv=cmd, returncode=1, stdout="", stderr=denied, denied=denied)
 
     workspace = pol.workspace_dir()
+    locked = refuse_workspace(workspace, cmd)
+    if locked:
+        return RunResult(argv=cmd, returncode=1, stdout="", stderr=locked, denied=locked)
     workspace.mkdir(parents=True, exist_ok=True)
     name = f"agents-term-{uuid.uuid4().hex[:12]}"
 
