@@ -12,6 +12,7 @@ from typing import Any
 from . import __version__
 from .driver import format_result
 from .manifest import help_json
+from .mutate import edit_file, format_edit, format_write, write_file
 from .policy import Policy, refuse_workspace
 from .readonly import (
     DEFAULT_GREP_MAX,
@@ -63,6 +64,21 @@ def build_parser() -> argparse.ArgumentParser:
     stat_p.add_argument("path")
     stat_p.add_argument("--json", action="store_true", help="Emit JSON on stdout.")
 
+    write_p = sub.add_parser("write", help="Write a UTF-8 file inside the workspace root (mutating)")
+    write_p.add_argument("path")
+    write_p.add_argument("--content", default=None, help="Text to write.")
+    write_p.add_argument("--stdin", action="store_true", help="Read the text from stdin.")
+    write_p.add_argument("--create-only", action="store_true", help="Fail when the file already exists.")
+    write_p.add_argument("--json", action="store_true", help="Emit JSON on stdout.")
+
+    edit_p = sub.add_parser("edit", help="Replace an exact string in a file inside the workspace root (mutating)")
+    edit_p.add_argument("path")
+    edit_p.add_argument("--old", default=None, help="Exact text to replace.")
+    edit_p.add_argument("--new", default=None, help="Replacement text.")
+    edit_p.add_argument("--replace-all", action="store_true", help="Replace every occurrence.")
+    edit_p.add_argument("--stdin-json", action="store_true", help='Read {"old", "new"} from stdin.')
+    edit_p.add_argument("--json", action="store_true", help="Emit JSON on stdout.")
+
     run_p = sub.add_parser("run", help="Run a command under policy")
     run_p.add_argument("argv", nargs=argparse.REMAINDER, help="Command after --")
     return parser
@@ -89,12 +105,13 @@ def _emit(payload: dict[str, Any], text: str, *, as_json: bool, truncated: bool 
     return 0
 
 
-def _readonly(
-    fn: Callable[[], dict[str, Any]],
+def _confined(
+    fn: Callable[[], Any],
     *,
     as_json: bool,
-    text_of: Callable[[dict[str, Any]], str],
+    text_of: Callable[[Any], str],
 ) -> int:
+    """Run a workspace-confined operation and emit its result or its error."""
     try:
         payload = fn()
     except ReadonlyError as exc:
@@ -118,19 +135,19 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(help_json(), indent=2))
         return 0
     if command == "list":
-        return _readonly(
+        return _confined(
             lambda: list_directory(_root(), args.path),
             as_json=args.json,
             text_of=format_list,
         )
     if command == "read":
-        return _readonly(
+        return _confined(
             lambda: read_file(_root(), args.path, offset=args.offset, limit=args.limit),
             as_json=args.json,
             text_of=format_read,
         )
     if command in ("grep", "search"):
-        return _readonly(
+        return _confined(
             lambda: grep_files(
                 _root(),
                 args.pattern,
@@ -144,10 +161,46 @@ def main(argv: list[str] | None = None) -> int:
             text_of=format_grep,
         )
     if command == "stat":
-        return _readonly(
+        return _confined(
             lambda: stat_path(_root(), args.path),
             as_json=args.json,
             text_of=format_stat,
+        )
+    if command == "write":
+        if (args.content is not None) == bool(args.stdin):
+            print("write requires exactly one of --content or --stdin", file=sys.stderr)
+            return 2
+        content = sys.stdin.read() if args.stdin else args.content
+        return _confined(
+            lambda: write_file(_root(), args.path, content, create_only=args.create_only),
+            as_json=args.json,
+            text_of=format_write,
+        )
+    if command == "edit":
+        if args.stdin_json:
+            if args.old is not None or args.new is not None:
+                print("edit takes either --old/--new or --stdin-json, not both", file=sys.stderr)
+                return 2
+            try:
+                payload = json.loads(sys.stdin.read())
+            except (ValueError, TypeError):
+                print("invalid stdin json", file=sys.stderr)
+                return 2
+            if not isinstance(payload, dict) or not isinstance(payload.get("old"), str) or not isinstance(payload.get("new"), str):
+                print("invalid stdin json", file=sys.stderr)
+                return 2
+            old = payload["old"]
+            new = payload["new"]
+        else:
+            if args.old is None or args.new is None:
+                print("edit requires --old and --new, or --stdin-json", file=sys.stderr)
+                return 2
+            old = args.old
+            new = args.new
+        return _confined(
+            lambda: edit_file(_root(), args.path, old=old, new=new, replace_all=args.replace_all),
+            as_json=args.json,
+            text_of=format_edit,
         )
     if command == "run":
         raw = list(args.argv or [])

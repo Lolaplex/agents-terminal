@@ -4,7 +4,7 @@ Installed command: `agents-terminal`. Machine-readable catalog: `python -m agent
 
 No subcommand prints help. This package does not start a server.
 
-Read-only commands observe the workspace root and do not spawn a process. They do not create the root, and they skip the PyPI update check so the process does not write the update cache. `run` is the only mutating command.
+Read-only commands observe the workspace root and do not spawn a process. They do not create the root, and they skip the PyPI update check so the process does not write the update cache. `write`, `edit`, and `run` are mutating; they may trigger the PyPI update check like `run` does.
 
 ## Root
 
@@ -45,6 +45,22 @@ Text lines are `path:line:text`. No matches is exit 0. A directory walk skips bi
 
 `lstat` one path. Text is `path`, `type`, `size`, `mtime`, `mode`, and `target` when the path is a symlink. `mtime` is UTC `YYYY-MM-DDTHH:MM:SSZ`. `mode` is four octal digits. JSON includes `"target": null` for anything that is not a symlink.
 
+### `write PATH [--stdin | --content TEXT] [--create-only] [--json]`
+
+Write UTF-8 text to `PATH`. Exactly one of `--content` or `--stdin` is required; neither or both is exit 2. Missing parent directories are created inside the root. The write is atomic: a temp file in the same directory is replaced with `os.replace`.
+
+An existing file keeps its line endings (CRLF stays CRLF, LF stays LF). A new file uses LF. `--create-only` fails with `exists` when the file already exists. A symlink, a directory, or a binary file (NUL byte) is refused and not overwritten.
+
+Text stdout is `wrote <relpath> (<n> lines, <bytes> bytes)`. JSON: `{"path", "created", "lines", "bytes"}`.
+
+### `edit PATH --old TEXT --new TEXT [--replace-all] [--stdin-json] [--json]`
+
+Exact string replacement, no regular expressions. `--old` must match exactly once. Zero matches is `old text not found` (exit 1). More than one match without `--replace-all` is `old text matches N times; add context or pass --replace-all` (exit 1). The file is unchanged on either error. An empty `--old` is exit 2.
+
+An exact match on the file's own bytes wins, so a file with mixed line endings keeps every byte it had and the diff stays local. Only when that finds nothing does matching fall back to line-ending tolerance: CRLF in the file then matches LF in `--old`, and the file is rewritten with its dominant line ending. `--stdin-json` reads `{"old": "...", "new": "..."}` from stdin, which is the path for multi-line edits without shell quoting. Passing `--stdin-json` together with `--old`/`--new` is exit 2. The write is atomic like `write`.
+
+Text stdout is a unified diff (`difflib`, 3 lines of context) followed by `edited <relpath>: <k> replacement(s), lines <start>-<end>`. JSON: `{"path", "replacements", "first_line", "last_line", "diff"}`.
+
 ### `run -- <argv…>`
 
 Execute that argv under the policy. The `--` is stripped. Missing argv exits 2. The process exit code is the child's exit code. Stdout is the driver's formatted result. This command is `mutating`.
@@ -55,7 +71,7 @@ Execute that argv under the policy. The `--` is stripped. Missing argv exits 2. 
 | --- | --- |
 | 0 | Success, including no grep matches and a read past EOF |
 | 1 | Not found, path escape, binary file, permission, wrong file type |
-| 2 | Usage: bad offset, limit, max, or pattern |
+| 2 | Usage: bad offset, limit, max, pattern, content source, or edit arguments |
 
 On failure the message is one stderr line and stdout is empty. In text mode a successful truncated read or search also prints `truncated` on stderr. `--json` keeps that flag in the object and leaves stderr empty on success.
 
@@ -69,3 +85,6 @@ On failure the message is one stderr line and stdout is empty. In text mode a su
 | `not a file` / `not a directory` | Wrong type, including fifos and device nodes |
 | `binary file` | NUL byte in a direct read or direct grep |
 | `empty pattern` / `invalid pattern` | Grep pattern (exit 2) |
+| `exists` | `write --create-only` against an existing file |
+| `old text not found` | `edit --old` matched nothing |
+| `old text matches N times; add context or pass --replace-all` | `edit --old` matched more than once without `--replace-all` |

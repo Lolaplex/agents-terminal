@@ -22,7 +22,7 @@ A JSON policy `env_allow` array replaces the default list instead of appending.
 
 ## Read-only root
 
-`list`, `read`, `grep` / `search`, and `stat` use `work_root()` and do not create it. That path is policy `cwd` when set, otherwise the workspace directory below. They do not go through the subprocess or OpenShell driver. Path rules are in [`CLI.md`](CLI.md). `run` is unchanged and remains the mutating command.
+`list`, `read`, `grep` / `search`, and `stat` use `work_root()` and do not create it. That path is policy `cwd` when set, otherwise the workspace directory below. They do not go through the subprocess or OpenShell driver. Path rules are in [`CLI.md`](CLI.md). `write` and `edit` use the same root and confinement and are mutating. `run` is unchanged and remains mutating.
 
 ## Workspace and timeout
 

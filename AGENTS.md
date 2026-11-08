@@ -36,6 +36,6 @@ ENV AGENTS_OPENSHELL_DIR=/opt/openshell
 
 ## Read-only commands
 
-`list`, `read`, `grep` (`search`), and `stat` only observe the workspace root. They do not spawn a shell. `run` executes argv and is mutating.
+`list`, `read`, `grep` (`search`), and `stat` only observe the workspace root. They do not spawn a shell. `write` and `edit` change files inside the root and are mutating; `run` executes argv and is mutating.
 
 `python -m agents_terminal --help-json` sets `side_effects` to `read-only` or `mutating` on every command. Contract: `abi/METADATA.md`.

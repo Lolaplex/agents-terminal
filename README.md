@@ -1,7 +1,7 @@
 <h1 align="center">agents-terminal</h1>
 
 <p align="center">
-  <a href="https://github.com/Lolaplex/agents-terminal/releases"><img src="https://img.shields.io/badge/version-0.0.5-blue.svg?style=flat-square" alt="Version 0.0.5"></a>
+  <a href="https://github.com/Lolaplex/agents-terminal/releases"><img src="https://img.shields.io/badge/version-0.0.6-blue.svg?style=flat-square" alt="Version 0.0.6"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://pypi.org/project/agents-terminal/"><img src="https://img.shields.io/pypi/v/agents-terminal.svg?style=flat-square" alt="PyPI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
@@ -72,9 +72,11 @@ No MCP server. Machine-readable catalog: `python -m agents_terminal --help-json`
 | `agents-terminal read PATH [--offset N] [--limit N]` | read-only | Read a text file. `--offset` is the 1-based line |
 | `agents-terminal grep PATTERN [PATH]` | read-only | Search file contents. Alias: `search` |
 | `agents-terminal stat PATH` | read-only | File type, size, mode, and mtime |
+| `agents-terminal write PATH [--stdin \| --content TEXT]` | mutating | Write UTF-8 text. Atomic, keeps line endings |
+| `agents-terminal edit PATH --old TEXT --new TEXT` | mutating | Exact string replacement with a unified diff |
 | `agents-terminal run -- <argv…>` | mutating | Run that argv under the policy. No shell |
 
-Read-only commands do not spawn a process and cannot create, modify, or delete files. Missing `side_effects` means mutating. No subcommand prints help. For `run`, the exit code is the child's exit code.
+Read-only commands do not spawn a process and cannot create, modify, or delete files. `write` and `edit` stay inside the same workspace root and never spawn a shell. Missing `side_effects` means mutating. No subcommand prints help. For `run`, the exit code is the child's exit code.
 
 ```bash
 agents-terminal run -- echo hello
@@ -88,7 +90,7 @@ Contract in [`abi/`](abi/):
 
 - [`WHY.md`](abi/WHY.md) — argv and an allowlisted env
 - [`POLICY.md`](abi/POLICY.md) — drivers, env, workspace, timeout
-- [`CLI.md`](abi/CLI.md) — `list`, `read`, `grep`, `stat`, `run`
+- [`CLI.md`](abi/CLI.md) — `list`, `read`, `grep`, `stat`, `write`, `edit`, `run`
 - [`METADATA.md`](abi/METADATA.md) — `side_effects`: `read-only` or `mutating`
 
 ---

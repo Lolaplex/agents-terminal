@@ -35,7 +35,7 @@ The top-level `classification` object repeats the field names:
 
 `read-only` means the command only observes paths inside the workspace root. It does not create, modify, or delete anything, and it does not spawn a process.
 
-`mutating` means the command may change state or execute arbitrary argv.
+`mutating` means the command may change state or execute arbitrary argv. `write` and `edit` change files inside the workspace root; `run` executes arbitrary argv.
 
 | Command | `side_effects` |
 | --- | --- |
@@ -43,6 +43,8 @@ The top-level `classification` object repeats the field names:
 | `read` | `read-only` |
 | `grep` (alias `search`) | `read-only` |
 | `stat` | `read-only` |
+| `write` | `mutating` |
+| `edit` | `mutating` |
 | `run` | `mutating` |
 
 `annotations` uses the MCP tool annotation names `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. They describe the same fact as `side_effects`. They are not a second policy.

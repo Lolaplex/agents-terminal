@@ -10,7 +10,7 @@ import sys
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
-from unittest import TestCase, mock
+from unittest import TestCase, mock, skipUnless
 
 from agents_terminal import __version__
 from agents_terminal.__main__ import main
@@ -27,6 +27,25 @@ from agents_terminal.readonly import (
 )
 
 _SECRET = "TOP-SECRET-CONTENTS"
+
+
+def _can_symlink() -> bool:
+    """Windows needs Developer Mode or admin for os.symlink (WinError 1314)."""
+    if getattr(os, "symlink", None) is None:
+        return False
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as raw:
+        tmp = Path(raw)
+        try:
+            os.symlink(tmp / "a", tmp / "b")
+        except (OSError, NotImplementedError):
+            return False
+    return True
+
+
+_SYMLINK_OK = _can_symlink()
+_SYMLINK_SKIP = "os.symlink unavailable (Windows needs Developer Mode or admin; WinError 1314)"
 
 
 def _snapshot(root: Path) -> list[tuple[object, ...]]:
@@ -62,9 +81,10 @@ class TestPathSafety(TestCase):
         (self.root / "ws-evil" / "ok.txt").write_text("inside\n", encoding="utf-8")
         (self.evil / "x.txt").write_text(_SECRET, encoding="utf-8")
         (self.outside / "secret.txt").write_text(_SECRET, encoding="utf-8")
-        os.symlink(Path("..") / "outside" / "secret.txt", self.root / "leak")
-        os.symlink(self.outside, self.root / "leakdir")
-        os.symlink(self.root / "ok.txt", self.root / "inside-link")
+        if _SYMLINK_OK:
+            os.symlink(Path("..") / "outside" / "secret.txt", self.root / "leak")
+            os.symlink(self.outside, self.root / "leakdir")
+            os.symlink(self.root / "ok.txt", self.root / "inside-link")
         self.before = _snapshot(self.root)
         self.evil_before = _snapshot(self.evil)
         self.outside_before = _snapshot(self.outside)
@@ -75,6 +95,7 @@ class TestPathSafety(TestCase):
         self.assertEqual(_snapshot(self.outside), self.outside_before)
         self._td.cleanup()
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_relative_and_absolute_reads_stay_inside(self) -> None:
         rel = read_file(self.root, "ok.txt", offset=1, limit=1)
         abs_hit = read_file(self.root, str(self.root / "ok.txt"), offset=2, limit=1)
@@ -89,6 +110,7 @@ class TestPathSafety(TestCase):
         dotted = read_file(self.root, "ws-evil/../ok.txt", offset=1, limit=1)
         self.assertEqual(dotted["content"], "hello\n")
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_escape_attempts_are_rejected(self) -> None:
         escapes = [
             "../ws-evil/x.txt",
@@ -123,6 +145,7 @@ class TestPathSafety(TestCase):
                     self.assertEqual(ctx.exception.message, "invalid path")
                     self.assertEqual(ctx.exception.code, 2)
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_stat_describes_symlink_without_reading_target(self) -> None:
         described = stat_path(self.root, "leak")
         blob = json.dumps(described)
@@ -130,6 +153,7 @@ class TestPathSafety(TestCase):
         self.assertEqual(described["target"], os.readlink(self.root / "leak"))
         self.assertNotIn(_SECRET, blob)
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_list_does_not_descend_into_escaped_symlink(self) -> None:
         listed = list_directory(self.root, ".")
         names = [entry["name"] for entry in listed["entries"]]
@@ -141,6 +165,7 @@ class TestPathSafety(TestCase):
         self.assertEqual(leak["type"], "symlink")
         self.assertNotIn(_SECRET, json.dumps(listed))
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_grep_skips_symlink_dirs_and_files(self) -> None:
         (self.root / "note.txt").write_text("visible-token\n", encoding="utf-8")
         self.before = _snapshot(self.root)
@@ -162,6 +187,7 @@ class TestPathSafety(TestCase):
         self.assertEqual(ctx.exception.message, "not found")
         self.assertFalse(missing.exists())
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_symlink_workspace_root_still_confines(self) -> None:
         link = self.tmp / "link-ws"
         os.symlink(self.root, link)
@@ -172,6 +198,7 @@ class TestPathSafety(TestCase):
             read_file(link, str(self.outside / "secret.txt"))
         self.assertEqual(ctx.exception.message, "path escapes workspace root")
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_component_open_does_not_follow_symlink(self) -> None:
         nested = self.root / "nested"
         nested.mkdir()
@@ -187,6 +214,7 @@ class TestPathSafety(TestCase):
             _open_under(self.root.resolve(), self.root / "linksub" / "f.txt", directory=False)
         self.assertEqual(ctx.exception.message, "path escapes workspace root")
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_open_does_not_follow_final_symlink(self) -> None:
         self.assertTrue(hasattr(os, "O_NOFOLLOW"))
         with self.assertRaises(ReadonlyError) as ctx:
@@ -194,6 +222,7 @@ class TestPathSafety(TestCase):
                 pass
         self.assertEqual(ctx.exception.message, "path escapes workspace root")
 
+    @skipUnless(hasattr(os, "mkfifo"), "os.mkfifo is not available on Windows")
     def test_fifo_and_directory_are_not_files(self) -> None:
         os.mkfifo(self.root / "pipe")
         self.before = _snapshot(self.root)
@@ -211,6 +240,7 @@ class TestPathSafety(TestCase):
             list_directory(self.root, "ok.txt")
         self.assertEqual(ctx.exception.message, "not a directory")
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_operations_do_not_write_or_spawn(self) -> None:
         real_open = os.open
 
@@ -353,7 +383,7 @@ class TestManifest(TestCase):
         self.assertEqual(data["classification"]["annotation"], "annotations.readOnlyHint")
         self.assertEqual(CLASSIFICATION["enum"], ["read-only", "mutating"])
         commands = data["commands"]
-        self.assertEqual(set(commands), {"list", "read", "grep", "stat", "run"})
+        self.assertEqual(set(commands), {"list", "read", "grep", "stat", "write", "edit", "run"})
         for name, spec in commands.items():
             side = spec["side_effects"]
             self.assertIn(side, ("read-only", "mutating"))
@@ -368,6 +398,10 @@ class TestManifest(TestCase):
             json.dumps(spec)
         for name in ("list", "read", "grep", "stat"):
             self.assertEqual(commands[name]["side_effects"], "read-only")
+            self.assertFalse(commands[name]["annotations"]["openWorldHint"])
+        for name in ("write", "edit"):
+            self.assertEqual(commands[name]["side_effects"], "mutating")
+            self.assertTrue(commands[name]["mutates"])
             self.assertFalse(commands[name]["annotations"]["openWorldHint"])
         self.assertEqual(commands["run"]["side_effects"], "mutating")
         self.assertTrue(commands["run"]["mutates"])
@@ -468,6 +502,7 @@ class TestCli(TestCase):
         self.assertIn("type: file", out)
         self.assertIn("path: ok.txt", out)
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_escape_and_missing_root_do_not_create_files(self) -> None:
         outside = self.root.parent / "secret.txt"
         outside.write_text(_SECRET, encoding="utf-8")
@@ -568,9 +603,10 @@ class TestFailClosed(TestCase):
         self.outside.mkdir()
         (self.root / "ok.txt").write_text("hello\n", encoding="utf-8")
         (self.outside / "secret.txt").write_text(_SECRET, encoding="utf-8")
-        os.symlink(self.outside / "secret.txt", self.root / "leak")
-        os.symlink(self.outside, self.root / "leakdir")
-        os.symlink(self.root / "ok.txt", self.root / "inside-link")
+        if _SYMLINK_OK:
+            os.symlink(self.outside / "secret.txt", self.root / "leak")
+            os.symlink(self.outside, self.root / "leakdir")
+            os.symlink(self.root / "ok.txt", self.root / "inside-link")
 
     def tearDown(self) -> None:
         self._td.cleanup()
@@ -591,6 +627,7 @@ class TestFailClosed(TestCase):
         self.assertTrue(_is_reparse(_ReparseStat(stat.S_IFLNK | 0o777, 0)))
         self.assertFalse(_is_reparse(_ReparseStat(stat.S_IFREG | 0o644, 0)))
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_missing_nofollow_or_dir_fd_reads_plain_files_and_rejects_escapes(self) -> None:
         from agents_terminal.readonly import _fd_confinement_supported
 
@@ -636,6 +673,7 @@ class TestFailClosed(TestCase):
                             self.assertNotIn(_SECRET, ctx.exception.message)
                     self.assertEqual(dir_fd_calls, [])
 
+    @skipUnless(_SYMLINK_OK, _SYMLINK_SKIP)
     def test_stat_uses_dir_fd_and_rejects_escapes(self) -> None:
         seen: list[object] = []
         real_stat = os.stat
@@ -666,6 +704,7 @@ class TestFailClosed(TestCase):
         self.assertEqual(link["type"], "symlink")
         self.assertNotIn(_SECRET, json.dumps(link))
 
+    @skipUnless(os.supports_dir_fd, "dir_fd is not advertised on this platform")
     def test_dir_fd_typeerror_is_readonly_error(self) -> None:
         real_open = os.open
 

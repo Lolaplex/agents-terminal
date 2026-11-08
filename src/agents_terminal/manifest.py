@@ -226,6 +226,87 @@ def help_json() -> dict[str, Any]:
                     ["path"],
                 ),
             ),
+            "write": _command(
+                usage="agents-terminal write PATH [--stdin | --content TEXT] [--create-only] [--json]",
+                description=(
+                    "Write UTF-8 text to a file inside the workspace root. "
+                    "Missing parent directories are created inside the root. "
+                    "An existing file keeps its line endings. A symlink, directory, or binary target is refused."
+                ),
+                side_effects=mutating,
+                open_world=False,
+                parameters=_object(
+                    {
+                        "path": {
+                            "type": "string",
+                            "description": "File relative to the workspace root, or an absolute path inside it.",
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Text to write. Exactly one of content or stdin is required.",
+                        },
+                        "stdin": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": "Read the text from stdin instead of content.",
+                        },
+                        "create_only": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": "Fail with exists when the file already exists.",
+                        },
+                        "json": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": "Emit a JSON object on stdout.",
+                        },
+                    },
+                    ["path"],
+                ),
+            ),
+            "edit": _command(
+                usage="agents-terminal edit PATH --old TEXT --new TEXT [--replace-all] [--stdin-json] [--json]",
+                description=(
+                    "Replace an exact string in a UTF-8 file inside the workspace root. "
+                    "No regular expressions. An exact match on the file's bytes wins, so mixed line endings are preserved; "
+                    "otherwise matching falls back to line-ending tolerance. "
+                    "old must match exactly once unless replace_all is true."
+                ),
+                side_effects=mutating,
+                open_world=False,
+                parameters=_object(
+                    {
+                        "path": {
+                            "type": "string",
+                            "description": "File relative to the workspace root, or an absolute path inside it.",
+                        },
+                        "old": {
+                            "type": "string",
+                            "description": "Exact text to replace. Must not be empty.",
+                        },
+                        "new": {
+                            "type": "string",
+                            "description": "Replacement text.",
+                        },
+                        "replace_all": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": "Replace every occurrence instead of requiring exactly one.",
+                        },
+                        "stdin_json": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": 'Read {"old", "new"} from stdin instead of --old/--new.',
+                        },
+                        "json": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": "Emit a JSON object on stdout.",
+                        },
+                    },
+                    ["path"],
+                ),
+            ),
             "run": _command(
                 usage="agents-terminal run -- <argv...>",
                 description="Run argv under terminal policy with no shell. May modify state.",
