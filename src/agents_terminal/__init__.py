@@ -5,4 +5,9 @@
 All three are mutating. ``--help-json`` declares ``side_effects``.
 """
 
-__version__ = "0.0.6"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("agents-terminal")
+except PackageNotFoundError:  # a source checkout that was never installed
+    __version__ = "0.0.0+source"
