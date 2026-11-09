@@ -55,7 +55,9 @@ Set `AGENTS_TERMINAL_DRIVER=openshell|subprocess|auto`.
 | Variable | Description |
 | :--- | :--- |
 | `AGENTS_TERMINAL_DRIVER` | `auto` (default), `subprocess`, or `openshell` |
-| `AGENTS_WORKSPACE_DIR` | Working directory (default `~/.agents/workspace`) |
+| `AGENTS_WORKSPACE_DIR` | Working directory (default `~/.agents/workspace`). Does not confine anything |
+| `AGENTS_WORKSPACE_LOCK` | `1` / `true` / `yes` / `on` confines `run` and every path to the workspace root. Off by default |
+| `AGENTS_WORKSPACE_ALLOW` | Extra allowed roots, separated by the OS path separator |
 | `AGENTS_TERMINAL_POLICY` | Path to a JSON policy file (`driver`, `env_allow`, `timeout_sec`, `cwd`, …) |
 | `AGENTS_TERMINAL_ENV_ALLOW` | Extra names, comma-separated, appended to the default allowlist. Alias: `AGENTS_TERMINAL_EXTRA_ENV` |
 | `AGENTS_TERMINAL_ENV_PASSTHROUGH` | `1` / `true` / `yes` copies the full parent environment and skips the allowlist |

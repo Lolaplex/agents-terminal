@@ -123,6 +123,8 @@ class TestWorkspaceLock(unittest.TestCase):
         env = os.environ.copy()
         for key in (
             "AGENTS_WORKSPACE_DIR",
+            "AGENTS_WORKSPACE_LOCK",
+            "AGENTS_WORKSPACE_ALLOW",
             "AGENTS_HOME",
             "AGENTS_SKILLS_DIR",
             "AGENTS_SKILLS_EXTRA",
@@ -135,6 +137,7 @@ class TestWorkspaceLock(unittest.TestCase):
             env.pop(key, None)
         if locked:
             env["AGENTS_WORKSPACE_DIR"] = str(self.root)
+            env["AGENTS_WORKSPACE_LOCK"] = "1"
         env["AGENTS_TERMINAL_POLICY"] = ""
         env["AGENTS_TERMINAL_DRIVER"] = "subprocess"
         env["AGENTS_NO_UPDATE_CHECK"] = "1"
@@ -227,6 +230,22 @@ class TestWorkspaceLock(unittest.TestCase):
     def test_blank_unlocked(self) -> None:
         pol = Policy(cwd=str(self.root))
         with self._env(False, AGENTS_WORKSPACE_DIR="   "):
+            result = run_argv(self._read(str(self.secret)), policy=pol)
+        self.assertIsNone(result.denied)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "TOPSECRET")
+
+    def test_dir_alone_does_not_lock(self) -> None:
+        pol = Policy(cwd=str(self.root))
+        with self._env(False, AGENTS_WORKSPACE_DIR=str(self.root)):
+            result = run_argv(self._read(str(self.secret)), policy=pol)
+        self.assertIsNone(result.denied)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "TOPSECRET")
+
+    def test_allow_list_opens_extra_root(self) -> None:
+        pol = Policy(cwd=str(self.outside))
+        with self._env(True, AGENTS_WORKSPACE_ALLOW=str(self.outside)):
             result = run_argv(self._read(str(self.secret)), policy=pol)
         self.assertIsNone(result.denied)
         self.assertEqual(result.returncode, 0, result.stderr)

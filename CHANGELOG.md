@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The workspace boundary is its own switch. `AGENTS_WORKSPACE_DIR` only names the working directory; `AGENTS_WORKSPACE_LOCK=1|true|yes|on` confines `run` and every path to it. A host that sets a working directory is no longer confined by accident.
+- `AGENTS_WORKSPACE_ALLOW` adds allowed roots, separated by the OS path separator.
+
 ## [0.0.6] - 2026-11-08
 
 ### Added

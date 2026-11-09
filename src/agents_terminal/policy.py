@@ -116,12 +116,34 @@ _EMBED_REL = re.compile(r"(?:^|[\s\"'=])(\.\.[\\/][^\"'\s),;]*)")
 _POSIX_ABS = re.compile(r"(?:^|[\s\"'=])(/[^\"'\s),;]+)")
 
 
+def _flag(name: str) -> bool:
+    """Boolean config: ``1``, ``true``, ``yes``, or ``on``. Anything else is off."""
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _paths(name: str) -> list[Path]:
+    """Path-list config: entries separated by ``os.pathsep``."""
+    raw = os.environ.get(name, "")
+    return [Path(part.strip()).expanduser() for part in raw.split(os.pathsep) if part.strip()]
+
+
 def workspace_root() -> Path | None:
-    """Resolved ``AGENTS_WORKSPACE_DIR``, or None when the lock is off."""
-    raw = os.environ.get("AGENTS_WORKSPACE_DIR", "").strip()
-    if not raw:
+    """Resolved workspace root when the lock is on, else None.
+
+    ``AGENTS_WORKSPACE_DIR`` only says where work happens. The boundary is
+    enforced only when ``AGENTS_WORKSPACE_LOCK`` is truthy, so a host that
+    sets a working directory is never confined by accident.
+    """
+    if not _flag("AGENTS_WORKSPACE_LOCK"):
         return None
-    path = Path(raw).expanduser()
+    raw = os.environ.get("AGENTS_WORKSPACE_DIR", "").strip()
+    if raw:
+        path = Path(raw).expanduser()
+    else:
+        try:
+            path = Policy.load().workspace_dir()
+        except (OSError, RuntimeError, ValueError):
+            return None
     try:
         return path.resolve(strict=False)
     except (OSError, RuntimeError):
@@ -192,11 +214,8 @@ def _internal_roots() -> list[Path]:
         raw = os.environ.get(key, "").strip()
         if raw:
             roots.append(Path(raw).expanduser())
-    extra = os.environ.get("AGENTS_SKILLS_EXTRA", "")
-    for part in extra.split(os.pathsep):
-        part = part.strip()
-        if part:
-            roots.append(Path(part).expanduser())
+    roots.extend(_paths("AGENTS_SKILLS_EXTRA"))
+    roots.extend(_paths("AGENTS_WORKSPACE_ALLOW"))
     return roots
 
 
@@ -287,10 +306,11 @@ def _argv_paths(argv: Sequence[str], base: Path) -> list[Path]:
 
 
 def refuse_workspace(cwd: str | Path | None, argv: Sequence[str] = ()) -> str | None:
-    """Refuse a user cwd or tool path that resolves outside ``AGENTS_WORKSPACE_DIR``.
+    """Refuse a cwd or command path that resolves outside the locked workspace.
 
-    Unset or blank env keeps the current behavior. Skills, modules, memory,
-    traces, schedules, and ``AGENTS_HOME`` stay reachable. Symlink targets count.
+    The lock is off unless ``AGENTS_WORKSPACE_LOCK`` is truthy. Skills, modules,
+    memory, traces, schedules, ``AGENTS_HOME``, and every entry of
+    ``AGENTS_WORKSPACE_ALLOW`` stay reachable. Symlink targets count.
     """
     root = workspace_root()
     if root is None:

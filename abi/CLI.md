@@ -13,6 +13,8 @@ The root is the same directory `run` would use as its working directory (`Policy
 1. Policy `cwd`, when set.
 2. Otherwise `openshell_workspace`, `AGENTS_WORKSPACE_DIR`, `AGENTS_HOME/workspace`, or `~/.agents/workspace`.
 
+Read-only commands and `write` / `edit` always stay inside that root. `run` is confined to it only when `AGENTS_WORKSPACE_LOCK` is on.
+
 Paths may be relative to that root or absolute. After symlink resolution the real path must stay inside the root. `..`, a sibling prefix such as `<root>-evil`, and a symlink that resolves outside are rejected with `path escapes workspace root`. NUL, CR, and LF in a path are `invalid path` (exit 2).
 
 Confinement is by resolved path. A hard link that already lives inside the root is readable. `stat` does not follow the final symlink, so a link that lives in the root is described even when its target is outside. `read` and `grep` follow a symlink path only when the target stays inside the root. Directory walks do not descend into symlinks.

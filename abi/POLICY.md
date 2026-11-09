@@ -2,6 +2,8 @@
 
 Loaded from `AGENTS_TERMINAL_POLICY` (JSON file) when that path is a file. Otherwise from the environment, then defaults.
 
+Configuration rule: one variable carries one decision. A value never implies enforcement; enforcement has its own switch, and restrictive switches default to off. Booleans accept `1`/`true`/`yes`/`on`; lists use the OS path separator.
+
 ## Driver
 
 `AGENTS_TERMINAL_DRIVER` is `auto` (default), `subprocess`, or `openshell`.
@@ -27,5 +29,11 @@ A JSON policy `env_allow` array replaces the default list instead of appending.
 ## Workspace and timeout
 
 Working directory for `run`: policy `cwd` or `openshell_workspace`, else `AGENTS_WORKSPACE_DIR`, else `AGENTS_HOME/workspace`, else `~/.agents/workspace`. `run` creates that directory if it is missing. Read-only commands use the same path and do not create it.
+
+## Workspace lock
+
+`AGENTS_WORKSPACE_DIR` only names the working directory. The boundary is a separate decision: `AGENTS_WORKSPACE_LOCK=1|true|yes|on` confines `run` and every path to that root. Unset, blank, or any other value leaves the lock off, so a host that sets a working directory is never confined by accident.
+
+When the lock is on and `AGENTS_WORKSPACE_DIR` is unset, the root is the default workspace directory above. `AGENTS_WORKSPACE_ALLOW` adds roots, separated by the OS path separator. `AGENTS_HOME`, skills, modules, memory, traces, schedules, and routine runs stay reachable.
 
 `timeout_sec` defaults to 60. On timeout the process tree is killed.
