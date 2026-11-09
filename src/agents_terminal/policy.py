@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
 
+from agents_workspace import Workspace
+
 _DEFAULT_ENV_ALLOW = (
     "PATH",
     "SYSTEMROOT",
@@ -100,13 +102,13 @@ class Policy:
     def workspace_dir(self) -> Path:
         if self.openshell_workspace:
             return Path(self.openshell_workspace).expanduser().resolve()
-        workspace_env = os.environ.get("AGENTS_WORKSPACE_DIR", "").strip()
-        if workspace_env:
-            return Path(workspace_env).expanduser().resolve()
-        agents_home = os.environ.get("AGENTS_HOME", "").strip()
-        if agents_home:
-            return (Path(agents_home) / "workspace").resolve()
-        return (Path.home() / ".agents" / "workspace").resolve()
+        raw = (
+            os.environ.get("AGENTS_WORKDIR", "").strip()
+            or os.environ.get("AGENTS_WORKSPACE_DIR", "").strip()
+        )
+        if raw:
+            return Path(raw).expanduser().resolve()
+        return Workspace.from_env().workdir.resolve()
 
 
 _ESCAPE = "path escapes workspace root"
@@ -136,14 +138,10 @@ def workspace_root() -> Path | None:
     """
     if not _flag("AGENTS_WORKSPACE_LOCK"):
         return None
-    raw = os.environ.get("AGENTS_WORKSPACE_DIR", "").strip()
-    if raw:
-        path = Path(raw).expanduser()
-    else:
-        try:
-            path = Policy.load().workspace_dir()
-        except (OSError, RuntimeError, ValueError):
-            return None
+    try:
+        path = Policy.load().workspace_dir()
+    except (OSError, RuntimeError, ValueError):
+        return None
     try:
         return path.resolve(strict=False)
     except (OSError, RuntimeError):
@@ -174,10 +172,7 @@ def _under(root: Path, path: Path) -> bool:
 
 
 def _agents_home() -> Path:
-    raw = os.environ.get("AGENTS_HOME", "").strip()
-    if raw:
-        return Path(raw).expanduser()
-    return Path.home() / ".agents"
+    return Workspace.from_env().root
 
 
 def _internal_roots() -> list[Path]:
