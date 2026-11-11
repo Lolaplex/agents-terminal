@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `.mailmap` maps legacy `Klix`/`Felix Kempf` author names to `Klix927` (no history rewrite; display only).
+
+### Changed
 - abi docs/README name `AGENTS_WORKDIR`/`AGENTS_WORKDIR_LOCK`/`AGENTS_WORKDIR_ALLOW`
   and the `<ws>/work` default; old `AGENTS_WORKSPACE_*`/`AGENTS_HOME` names
   only appear as deprecated-alias notes.
