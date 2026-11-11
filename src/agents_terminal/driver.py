@@ -135,7 +135,7 @@ def run_argv(
 
     from pathlib import Path
     env = pol.filtered_env()
-    cwd_path = Path(pol.cwd).expanduser().resolve() if pol.cwd else pol.workspace_dir()
+    cwd_path = Path(pol.cwd).expanduser().resolve() if pol.cwd else pol.workdir_root()
     locked = refuse_workspace(cwd_path, cmd)
     if locked:
         return RunResult(argv=cmd, returncode=1, stdout="", stderr=locked, denied=locked)

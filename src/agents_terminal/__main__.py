@@ -86,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _root() -> Path:
     try:
-        root = Policy.load().work_root()
+        root = Policy.load().workdir()
     except (OSError, RuntimeError) as exc:
         raise ReadonlyError("invalid path") from exc
     denial = refuse_workspace(root, ())

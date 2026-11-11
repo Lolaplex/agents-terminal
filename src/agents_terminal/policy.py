@@ -93,22 +93,30 @@ class Policy:
                 out[key] = val
         return out
 
-    def work_root(self) -> Path:
+    def workdir(self) -> Path:
         """Directory ``run`` uses as its working directory. This does not create it."""
         if self.cwd:
             return Path(self.cwd).expanduser().resolve()
-        return self.workspace_dir()
+        return self.workdir_root()
 
-    def workspace_dir(self) -> Path:
+    def workdir_root(self) -> Path:
         if self.openshell_workspace:
             return Path(self.openshell_workspace).expanduser().resolve()
-        raw = (
-            os.environ.get("AGENTS_WORKDIR", "").strip()
-            or os.environ.get("AGENTS_WORKSPACE_DIR", "").strip()
-        )
+        raw = _read_alias(None, "AGENTS_WORKDIR", "AGENTS_WORKSPACE_DIR")
         if raw:
             return Path(raw).expanduser().resolve()
         return Workspace.from_env().workdir.resolve()
+
+    # deprecated aliases, one release
+    def work_root(self) -> Path:
+        import warnings
+        warnings.warn("work_root() is deprecated; use workdir()", DeprecationWarning, stacklevel=2)
+        return self.workdir()
+
+    def workspace_dir(self) -> Path:
+        import warnings
+        warnings.warn("workspace_dir() is deprecated; use workdir_root()", DeprecationWarning, stacklevel=2)
+        return self.workdir_root()
 
 
 _ESCAPE = "path escapes workspace root"
@@ -118,9 +126,17 @@ _EMBED_REL = re.compile(r"(?:^|[\s\"'=])(\.\.[\\/][^\"'\s),;]*)")
 _POSIX_ABS = re.compile(r"(?:^|[\s\"'=])(/[^\"'\s),;]+)")
 
 
+from agents_workspace.compat import read_alias as _read_alias
+
+
 def _flag(name: str) -> bool:
     """Boolean config: ``1``, ``true``, ``yes``, or ``on``. Anything else is off."""
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _flag_alias(new: str, old: str) -> bool:
+    val = _read_alias(None, new, old)
+    return val.strip().lower() in {"1", "true", "yes", "on"} if val else False
 
 
 def _paths(name: str) -> list[Path]:
@@ -129,17 +145,17 @@ def _paths(name: str) -> list[Path]:
     return [Path(part.strip()).expanduser() for part in raw.split(os.pathsep) if part.strip()]
 
 
-def workspace_root() -> Path | None:
-    """Resolved workspace root when the lock is on, else None.
+def workdir_root() -> Path | None:
+    """Resolved workdir root when the lock is on, else None.
 
-    ``AGENTS_WORKSPACE_DIR`` only says where work happens. The boundary is
-    enforced only when ``AGENTS_WORKSPACE_LOCK`` is truthy, so a host that
+    ``AGENTS_WORKDIR`` only says where work happens. The boundary is
+    enforced only when ``AGENTS_WORKDIR_LOCK`` is truthy, so a host that
     sets a working directory is never confined by accident.
     """
-    if not _flag("AGENTS_WORKSPACE_LOCK"):
+    if not _flag_alias("AGENTS_WORKDIR_LOCK", "AGENTS_WORKSPACE_LOCK"):
         return None
     try:
-        path = Policy.load().workspace_dir()
+        path = Policy.load().workdir_root()
     except (OSError, RuntimeError, ValueError):
         return None
     try:
@@ -206,7 +222,10 @@ def _internal_roots() -> list[Path]:
         if raw:
             roots.append(Path(raw).expanduser())
     roots.extend(_paths("AGENTS_SKILLS_EXTRA"))
-    roots.extend(_paths("AGENTS_WORKSPACE_ALLOW"))
+    _allow = _read_alias(None, "AGENTS_WORKDIR_ALLOW", "AGENTS_WORKSPACE_ALLOW")
+    roots.extend(
+        Path(part.strip()).expanduser() for part in _allow.split(os.pathsep) if part.strip()
+    )
     return roots
 
 
@@ -299,11 +318,11 @@ def _argv_paths(argv: Sequence[str], base: Path) -> list[Path]:
 def refuse_workspace(cwd: str | Path | None, argv: Sequence[str] = ()) -> str | None:
     """Refuse a cwd or command path that resolves outside the locked workspace.
 
-    The lock is off unless ``AGENTS_WORKSPACE_LOCK`` is truthy. Skills, modules,
+    The lock is off unless ``AGENTS_WORKDIR_LOCK`` is truthy. Skills, modules,
     memory, traces, schedules, ``AGENTS_HOME``, and every entry of
-    ``AGENTS_WORKSPACE_ALLOW`` stay reachable. Symlink targets count.
+    ``AGENTS_WORKDIR_ALLOW`` stay reachable. Symlink targets count.
     """
-    root = workspace_root()
+    root = workdir_root()
     if root is None:
         return None
     explicit: Path | None = None
