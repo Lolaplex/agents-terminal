@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The workspace boundary is its own switch. `AGENTS_WORKSPACE_DIR` only names the working directory; `AGENTS_WORKSPACE_LOCK=1|true|yes|on` confines `run` and every path to it. A host that sets a working directory is no longer confined by accident.
-- `AGENTS_WORKSPACE_ALLOW` adds allowed roots, separated by the OS path separator.
+- `AGENTS_WORKSPACE_ALLOW` adds allowed roots
+- Lock internal roots now come from the resolver: workdir + the active workspace dir + host infra (keys, secrets, run, cache, logs, clients, agents.json, mcp.json, users.json). `~/.agents` is no longer implicitly allowed; under a different host it counts as a foreign tree and is denied.
+- Update-check cache lives at `<host>/cache/updates/`., separated by the OS path separator.
 
 ## [0.0.6] - 2026-11-08
 
