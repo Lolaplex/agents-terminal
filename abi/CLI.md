@@ -11,7 +11,7 @@ Read-only commands observe the workspace root and do not spawn a process. They d
 The root is the same directory `run` would use as its working directory (`Policy.work_root()`):
 
 1. Policy `cwd`, when set.
-2. Otherwise `openshell_workspace`, `AGENTS_WORKSPACE_DIR`, `AGENTS_HOME/workspace`, or `~/.agents/workspace`.
+2. Otherwise `openshell_workspace`, `AGENTS_WORKDIR`, or the workspace workdir default (`<ws>/work`; `AGENTS_WORKSPACE_DIR`/`AGENTS_HOME/workspace` remain readable as deprecated aliases for one release).
 
 Read-only commands and `write` / `edit` always stay inside that root. `run` is confined to it only when `AGENTS_WORKSPACE_LOCK` is on.
 
