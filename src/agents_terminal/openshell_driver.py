@@ -94,7 +94,7 @@ def run_openshell(
     if denied:
         return RunResult(argv=cmd, returncode=1, stdout="", stderr=denied, denied=denied)
 
-    workspace = pol.workspace_dir()
+    workspace = pol.workdir_root()
     locked = refuse_workspace(workspace, cmd)
     if locked:
         return RunResult(argv=cmd, returncode=1, stdout="", stderr=locked, denied=locked)

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Renames via shared alias helper: `workdir()`/`workdir_root()` replace `work_root()`/`workspace_dir()`/`workspace_root()` (deprecated aliases warn); `AGENTS_WORKDIR_LOCK` (alias `AGENTS_WORKSPACE_LOCK`), `AGENTS_WORKDIR_ALLOW` (alias `AGENTS_WORKSPACE_ALLOW`), `AGENTS_WORKSPACE_DIR` only a deprecated alias of `AGENTS_WORKDIR`.
 - The workspace boundary is its own switch. `AGENTS_WORKSPACE_DIR` only names the working directory; `AGENTS_WORKSPACE_LOCK=1|true|yes|on` confines `run` and every path to it. A host that sets a working directory is no longer confined by accident.
 - `AGENTS_WORKSPACE_ALLOW` adds allowed roots
 - Lock internal roots now come from the resolver: workdir + the active workspace dir + host infra (keys, secrets, run, cache, logs, clients, agents.json, mcp.json, users.json). `~/.agents` is no longer implicitly allowed; under a different host it counts as a foreign tree and is denied.
