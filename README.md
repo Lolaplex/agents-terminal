@@ -34,7 +34,7 @@ Agents do not get a shell string. `run` takes an argv vector after `--`, so the 
 
 The child inherits an allowlist, not the parent environment. Default names: `PATH`, `HOME`, `USER`, `SHELL`, `TEMP` / `TMP`, locale (`LANG`, `LC_ALL`, `TERM`), Windows roots (`SYSTEMROOT`, `WINDIR`), git author/committer, `GITHUB_TOKEN`, `GH_TOKEN`. Anything else is dropped unless you extend the list.
 
-On timeout the process tree is killed (job object / process group). Working directory defaults to `AGENTS_WORKSPACE_DIR` or `~/.agents/workspace`, created if missing.
+On timeout the process tree is killed (job object / process group). Working directory defaults to `AGENTS_WORKDIR` or the workspace workdir (`<ws>/work`), created if missing.
 
 ---
 
@@ -55,9 +55,9 @@ Set `AGENTS_TERMINAL_DRIVER=openshell|subprocess|auto`.
 | Variable | Description |
 | :--- | :--- |
 | `AGENTS_TERMINAL_DRIVER` | `auto` (default), `subprocess`, or `openshell` |
-| `AGENTS_WORKSPACE_DIR` | Working directory (default `~/.agents/workspace`). Does not confine anything |
-| `AGENTS_WORKSPACE_LOCK` | `1` / `true` / `yes` / `on` confines `run` and every path to the workspace root. Off by default |
-| `AGENTS_WORKSPACE_ALLOW` | Extra allowed roots, separated by the OS path separator |
+| `AGENTS_WORKDIR` | Working directory (default `<ws>/work`; `AGENTS_WORKSPACE_DIR` deprecated alias). Does not confine anything |
+| `AGENTS_WORKDIR_LOCK` | `1` / `true` / `yes` / `on` confines `run` and every path to the workspace root. Off by default |
+| `AGENTS_WORKDIR_ALLOW` | Extra allowed roots, separated by the OS path separator |
 | `AGENTS_TERMINAL_POLICY` | Path to a JSON policy file (`driver`, `env_allow`, `timeout_sec`, `cwd`, …) |
 | `AGENTS_TERMINAL_ENV_ALLOW` | Extra names, comma-separated, appended to the default allowlist. Alias: `AGENTS_TERMINAL_EXTRA_ENV` |
 | `AGENTS_TERMINAL_ENV_PASSTHROUGH` | `1` / `true` / `yes` copies the full parent environment and skips the allowlist |
