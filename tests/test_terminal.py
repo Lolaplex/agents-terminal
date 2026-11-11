@@ -222,8 +222,14 @@ class TestWorkspaceLock(unittest.TestCase):
             self.assertIsNone(home_cwd.denied, home_cwd.stderr)
             from agents_terminal.policy import refuse_workspace
 
-            self.assertIsNone(refuse_workspace(str(self.root), ["python", str(dot_skill)]))
+            # legacy ~/.agents is a foreign tree under a tmp host: fully denied
+            self.assertEqual(refuse_workspace(str(self.root), ["python", str(dot_skill)]), "path escapes workspace root")
             self.assertEqual(refuse_workspace(str(self.root), ["python", str(dot_key)]), "path escapes workspace root")
+            # host infra under the resolved host stays reachable
+            host_key = home / "keys" / "host.ed25519"
+            host_key.parent.mkdir(exist_ok=True)
+            host_key.write_text("k", encoding="utf-8")
+            self.assertIsNone(refuse_workspace(str(self.root), ["python", str(host_key)]))
             leaked = run_argv(self._read(str(self.secret)), policy=pol)
             self.assertEqual(leaked.denied, "path escapes workspace root")
 
