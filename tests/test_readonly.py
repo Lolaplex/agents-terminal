@@ -383,7 +383,7 @@ class TestManifest(TestCase):
         self.assertEqual(data["classification"]["annotation"], "annotations.readOnlyHint")
         self.assertEqual(CLASSIFICATION["enum"], ["read-only", "mutating"])
         commands = data["commands"]
-        self.assertEqual(set(commands), {"list", "read", "grep", "stat", "write", "edit", "run"})
+        self.assertEqual(set(commands), {"list", "read", "grep", "stat", "write", "edit", "run", "bg", "proc"})
         for name, spec in commands.items():
             side = spec["side_effects"]
             self.assertIn(side, ("read-only", "mutating"))
@@ -403,9 +403,10 @@ class TestManifest(TestCase):
             self.assertEqual(commands[name]["side_effects"], "mutating")
             self.assertTrue(commands[name]["mutates"])
             self.assertFalse(commands[name]["annotations"]["openWorldHint"])
-        self.assertEqual(commands["run"]["side_effects"], "mutating")
-        self.assertTrue(commands["run"]["mutates"])
-        self.assertTrue(commands["run"]["annotations"]["openWorldHint"])
+        for name in ("run", "bg", "proc"):
+            self.assertEqual(commands[name]["side_effects"], "mutating")
+            self.assertTrue(commands[name]["mutates"])
+            self.assertTrue(commands[name]["annotations"]["openWorldHint"])
         self.assertEqual(commands["grep"]["aliases"], ["search"])
         self.assertEqual(commands["read"]["parameters"]["properties"]["offset"]["default"], 1)
         self.assertIn("path", commands["read"]["parameters"]["required"])

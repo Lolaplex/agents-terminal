@@ -14,6 +14,17 @@ from .driver import format_result
 from .manifest import help_json
 from .mutate import edit_file, format_edit, format_write, write_file
 from .policy import Policy, refuse_workspace
+from .proc import (
+    ProcError,
+    bg_spawn,
+    format_proc,
+    proc_kill,
+    proc_list,
+    proc_log,
+    proc_poll,
+    proc_wait,
+    proc_write,
+)
 from .readonly import (
     DEFAULT_GREP_MAX,
     DEFAULT_READ_LIMIT,
@@ -81,6 +92,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_p = sub.add_parser("run", help="Run a command under policy")
     run_p.add_argument("argv", nargs=argparse.REMAINDER, help="Command after --")
+
+    bg_p = sub.add_parser("bg", help="Spawn argv detached as a background process (mutating)")
+    bg_p.add_argument("argv", nargs=argparse.REMAINDER, help="Command after --")
+    bg_p.add_argument("--json", action="store_true", help="Emit JSON on stdout.")
+
+    proc_p = sub.add_parser("proc", aliases=["process"], help="Manage background processes")
+    proc_p.add_argument("action", choices=["list", "poll", "wait", "log", "kill", "write"])
+    proc_p.add_argument("id", nargs="?", default="", help="proc_<id> from bg")
+    proc_p.add_argument("--timeout", type=float, default=600, help="wait: max seconds (default 600)")
+    proc_p.add_argument("--stream", default="both", choices=["out", "err", "both"], help="log: which stream")
+    proc_p.add_argument("--tail", type=int, default=200, help="log/wait: max lines per stream")
+    proc_p.add_argument("--data", default=None, help="write: text appended to the process stdin feed")
+    proc_p.add_argument("--json", action="store_true", help="Emit JSON on stdout.")
     return parser
 
 
@@ -202,6 +226,49 @@ def main(argv: list[str] | None = None) -> int:
             as_json=args.json,
             text_of=format_edit,
         )
+    if command == "bg":
+        raw = list(args.argv or [])
+        if raw and raw[0] == "--":
+            raw = raw[1:]
+        try:
+            payload = bg_spawn(raw)
+        except ProcError as exc:
+            print(exc.message, file=sys.stderr)
+            return exc.code
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"{payload['id']} pid={payload['pid']}")
+        return 0
+    if command in ("proc", "process"):
+        action = args.action
+        try:
+            if action == "list":
+                payload = proc_list()
+            elif not args.id:
+                print(f"proc {action} requires a process id", file=sys.stderr)
+                return 2
+            elif action == "poll":
+                payload = proc_poll(args.id)
+            elif action == "wait":
+                payload = proc_wait(args.id, timeout_sec=args.timeout)
+            elif action == "log":
+                payload = proc_log(args.id, stream=args.stream, tail=args.tail)
+            elif action == "kill":
+                payload = proc_kill(args.id)
+            elif action == "write":
+                if args.data is None:
+                    print("proc write requires --data", file=sys.stderr)
+                    return 2
+                payload = proc_write(args.id, args.data)
+        except ProcError as exc:
+            print(exc.message, file=sys.stderr)
+            return exc.code
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(format_proc(payload))
+        return 0
     if command == "run":
         raw = list(args.argv or [])
         if raw and raw[0] == "--":
