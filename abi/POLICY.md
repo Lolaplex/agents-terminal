@@ -34,6 +34,6 @@ Working directory for `run`: policy `cwd` or `openshell_workspace`, else `AGENTS
 
 `AGENTS_WORKDIR` only names the working directory. The boundary is a separate decision: `AGENTS_WORKDIR_LOCK=1|true|yes|on` confines `run` and every path to that root. Unset, blank, or any other value leaves the lock off, so a host that sets a working directory is never confined by accident.
 
-When the lock is on and `AGENTS_WORKDIR` is unset, the root is the default workdir above. `AGENTS_WORKDIR_ALLOW` adds roots, separated by the OS path separator. The host dir (`AGENTS_HOST_DIR`), skills, modules, memory, traces, schedules, and routine runs stay reachable. (`AGENTS_WORKSPACE_DIR`/`AGENTS_WORKSPACE_LOCK`/`AGENTS_WORKSPACE_ALLOW`/`AGENTS_HOME` are deprecated aliases for one release.)
+When the lock is on and `AGENTS_WORKDIR` is unset, the root is the default workdir above. `AGENTS_WORKDIR_ALLOW` adds roots, separated by the OS path separator. The host dir (`AGENTS_HOST_DIR`), skills, modules, memory, traces, schedules, and routine runs stay reachable. (`AGENTS_WORKSPACE_DIR`/`AGENTS_WORKSPACE_LOCK`/`AGENTS_WORKSPACE_ALLOW` are deprecated aliases for one release.)
 
 `timeout_sec` defaults to 60. On timeout the process tree is killed.

@@ -126,6 +126,7 @@ class TestWorkspaceLock(unittest.TestCase):
             "AGENTS_WORKSPACE_LOCK",
             "AGENTS_WORKSPACE_ALLOW",
             "AGENTS_HOME",
+            "AGENTS_HOST_DIR",
             "AGENTS_SKILLS_DIR",
             "AGENTS_SKILLS_EXTRA",
             "AGENTS_MODULES_DIR",
@@ -202,23 +203,23 @@ class TestWorkspaceLock(unittest.TestCase):
             "AGENTS_TRACES_DIR": self.tmp / "traces",
             "AGENTS_SCHEDULES_DIR": self.tmp / "schedules",
         }
-        home.mkdir()
-        (home / "note.txt").write_text("home", encoding="utf-8")
+        (home / "run").mkdir(parents=True)
+        (home / "run" / "note.txt").write_text("home", encoding="utf-8")
         for folder in named.values():
             folder.mkdir()
             (folder / "note.txt").write_text("keep", encoding="utf-8")
         dot_skill = Path.home() / ".agents" / "skills" / "note.md"
         dot_key = Path.home() / ".agents" / "keys" / "secret.ed25519"
         pol = Policy(cwd=str(self.root))
-        with self._env(True, AGENTS_HOME=str(home), **{key: str(path) for key, path in named.items()}):
-            home_file = run_argv(self._read(str(home / "note.txt")), policy=pol)
+        with self._env(True, AGENTS_HOST_DIR=str(home), **{key: str(path) for key, path in named.items()}):
+            home_file = run_argv(self._read(str(home / "run" / "note.txt")), policy=pol)
             self.assertIsNone(home_file.denied, home_file.stderr)
             self.assertEqual(home_file.stdout, "home")
             for folder in named.values():
                 result = run_argv(self._read(str(folder / "note.txt")), policy=pol)
                 self.assertIsNone(result.denied, result.stderr)
                 self.assertEqual(result.stdout, "keep")
-            home_cwd = run_argv([sys.executable, "-c", "print('ok')"], policy=Policy(cwd=str(home)))
+            home_cwd = run_argv([sys.executable, "-c", "print('ok')"], policy=Policy(cwd=str(home / "run")))
             self.assertIsNone(home_cwd.denied, home_cwd.stderr)
             from agents_terminal.policy import refuse_workspace
 

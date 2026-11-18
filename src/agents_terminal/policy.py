@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
 
-from agents_workspace import Workspace
+from agents_workspace import Workspace, allowed_roots
 
 _DEFAULT_ENV_ALLOW = (
     "PATH",
@@ -139,12 +139,6 @@ def _flag_alias(new: str, old: str) -> bool:
     return val.strip().lower() in {"1", "true", "yes", "on"} if val else False
 
 
-def _paths(name: str) -> list[Path]:
-    """Path-list config: entries separated by ``os.pathsep``."""
-    raw = os.environ.get(name, "")
-    return [Path(part.strip()).expanduser() for part in raw.split(os.pathsep) if part.strip()]
-
-
 def workdir_root() -> Path | None:
     """Resolved workdir root when the lock is on, else None.
 
@@ -190,43 +184,12 @@ def _under(root: Path, path: Path) -> bool:
 def _internal_roots() -> list[Path]:
     """Dirs the workspace lock must not treat as escapes.
 
-    The terminal workdir plus the active workspace's own tree plus
-    explicitly listed host infra parts (keys, secrets, run, cache, logs,
-    clients, agents.json, mcp.json, users.json). Host memory/skills do not
-    exist — they are never allowed (D-host-layer).
+    Canonical list lives in ``agents_workspace.allowed_roots`` (ws tree,
+    host infra, env-listed dirs, allow list); the terminal adds the active
+    workdir. Host memory/skills do not exist — never allowed (D-host-layer).
     """
     ws = Workspace.from_env()
-    host = ws.host
-    roots = [
-        ws.workdir,
-        ws.dir,
-        host.keys,
-        host.secrets,
-        host.run,
-        host.cache,
-        host.logs,
-        host.clients,
-        host.agents_json,
-        host.mcp_json,
-        host.users_file(),
-    ]
-    for key in (
-        "AGENTS_SKILLS_DIR",
-        "AGENTS_MODULES_DIR",
-        "AGENTS_MEMORY_PATH",
-        "AGENTS_TRACES_DIR",
-        "AGENTS_SCHEDULES_DIR",
-        "AGENTS_ROUTINE_RUNS_DIR",
-    ):
-        raw = os.environ.get(key, "").strip()
-        if raw:
-            roots.append(Path(raw).expanduser())
-    roots.extend(_paths("AGENTS_SKILLS_EXTRA"))
-    _allow = _read_alias(None, "AGENTS_WORKDIR_ALLOW", "AGENTS_WORKSPACE_ALLOW")
-    roots.extend(
-        Path(part.strip()).expanduser() for part in _allow.split(os.pathsep) if part.strip()
-    )
-    return roots
+    return [ws.workdir, *allowed_roots(ws)]
 
 
 def _permitted(path: Path, root: Path) -> bool:
@@ -319,7 +282,7 @@ def refuse_workspace(cwd: str | Path | None, argv: Sequence[str] = ()) -> str | 
     """Refuse a cwd or command path that resolves outside the locked workspace.
 
     The lock is off unless ``AGENTS_WORKDIR_LOCK`` is truthy. Skills, modules,
-    memory, traces, schedules, ``AGENTS_HOME``, and every entry of
+    memory, traces, schedules, the host dir, and every entry of
     ``AGENTS_WORKDIR_ALLOW`` stay reachable. Symlink targets count.
     """
     root = workdir_root()
