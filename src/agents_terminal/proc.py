@@ -1,16 +1,22 @@
 """Background processes under terminal policy.
 
-``bg`` spawns argv detached; ``proc`` manages it. State lives in per-proc dirs
-under ``AGENTS_TERMINAL_PROCS_DIR`` (default: ``<workspace>/procs``):
+``bg`` spawns a detached ``agents_terminal.procsup`` supervisor; ``proc``
+manages it. The supervisor reads argv/cwd from ``meta.json`` and execs the
+command with ``shell=False`` — argv never enters a batch file or shell line,
+so metacharacters in arguments cannot escape into another command.
 
-    procs/<id>/meta.json   id, argv, wrapper pid, cwd, created
+State lives in per-proc dirs under ``AGENTS_TERMINAL_PROCS_DIR`` (default:
+``<workspace>/procs``):
+
+    procs/<id>/meta.json   id, argv, supervisor pid, child_pid, cwd, created
     procs/<id>/out.log     stdout
     procs/<id>/err.log     stderr
-    procs/<id>/in.txt      stdin feed (posix fifo mode only)
-    procs/<id>/exit.json   {"code": N, "finished": ts} written by the wrapper
+    procs/<id>/in.txt      stdin feed (supervisor forwards appended bytes)
+    procs/<id>/exit.json   {"code": N, "finished": ts} written by the supervisor
 
-POSIX spawns a ``tail -f in.txt | argv`` feeder so ``proc write`` can append
-stdin later. Windows spawns argv directly; ``write`` is refused there.
+``bg`` only runs on the effective ``subprocess`` driver: when ``driver=auto``
+resolves to openshell, a detached host process would bypass the sandbox, so it
+is refused like a plain openshell command.
 """
 
 from __future__ import annotations
@@ -94,11 +100,13 @@ def _proc_state(pdir: Path) -> dict[str, Any]:
     code = _read_exit_code(pdir)
     finished = _read_json(pdir / "exit.json").get("finished") or ""
     pid = int(meta.get("pid") or 0)
-    running = code is None and _pid_alive(pid)
+    child_pid = int(meta.get("child_pid") or 0)
+    running = code is None and (_pid_alive(pid) or _pid_alive(child_pid))
     return {
         "id": pdir.name,
         "argv": meta.get("argv") or [],
         "pid": pid,
+        "child_pid": child_pid,
         "cwd": meta.get("cwd") or "",
         "created": meta.get("created") or "",
         "state": "running" if running else "exited",
@@ -118,10 +126,24 @@ def _tail(path: Path, max_lines: int) -> str:
     return "\n".join(lines)
 
 
+def _effective_driver(pol: Policy) -> str:
+    """Resolve ``auto`` the same way ``router.run_command`` does."""
+    driver = pol.driver
+    if driver == "auto":
+        from .openshell_driver import openshell_available
+
+        driver = "openshell" if openshell_available() else "subprocess"
+    return driver
+
+
 def bg_spawn(argv: list[str], *, policy: Policy | None = None) -> dict[str, Any]:
     pol = policy or Policy.load()
-    if pol.driver not in ("auto", "subprocess"):
-        raise ProcError("bg unsupported on openshell driver; run the foreground command instead", code=2)
+    driver = _effective_driver(pol)
+    if driver != "subprocess":
+        raise ProcError(
+            "bg requires the subprocess driver; a detached host process would bypass openshell",
+            code=2,
+        )
     denied = pol.check_request(read=False, write=False, net=False)
     if denied:
         raise ProcError(denied)
@@ -145,80 +167,41 @@ def bg_spawn(argv: list[str], *, policy: Policy | None = None) -> dict[str, Any]
     proc_id = "proc_" + uuid.uuid4().hex[:12]
     pdir = _procs_root() / proc_id
     pdir.mkdir(parents=True, exist_ok=True)
-    out_f = pdir / "out.log"
-    err_f = pdir / "err.log"
-    in_f = pdir / "in.txt"
-    exit_f = pdir / "exit.json"
-    in_f.touch()
-
-    env = pol.filtered_env()
-    if sys.platform == "win32":
-        inner = subprocess.list2cmdline(cmd)
-        # Batch file, not cmd /c text: nested quoting in the command line is unsafe.
-        # A bat expands %errorlevel% per line at run time, so the child's real code lands in exit.json.
-        bat = pdir / "run.bat"
-        bat.write_text(
-            "@echo off\r\n"
-            f'{inner} >"{out_f}" 2>"{err_f}" <"{in_f}"\r\n'
-            f"echo %errorlevel% >\"{exit_f}\"\r\n",
-            encoding="utf-8",
-        )
-        try:
-            proc = subprocess.Popen(
-                ["cmd.exe", "/c", str(bat)],
-                cwd=str(cwd_path),
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                # CREATE_NO_WINDOW detaches without a console. DETACHED_PROCESS
-                # would hand the child invalid std handles and bat redirects
-                # would create empty log files.
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
-                close_fds=True,
-            )
-        except OSError as exc:
-            raise ProcError(str(exc))
-        # exit.json holds the raw number on Windows; _read_exit_code normalizes.
-    else:
-        import shlex
-
-        fifo = pdir / "stdin.fifo"
-        try:
-            os.mkfifo(fifo)
-        except OSError as exc:
-            raise ProcError(f"mkfifo failed: {exc}")
-        cmd_q = " ".join(shlex.quote(a) for a in cmd)
-        script = (
-            f"tail -n +1 -f {shlex.quote(str(in_f))} >{shlex.quote(str(fifo))} & "
-            f"feeder=$!; "
-            f"{cmd_q} <{shlex.quote(str(fifo))} >{shlex.quote(str(out_f))} 2>{shlex.quote(str(err_f))}; "
-            f"code=$?; "
-            f"kill $feeder 2>/dev/null; "
-            f"printf '%s' \"$code\" >{shlex.quote(str(exit_f))}"
-        )
-        try:
-            proc = subprocess.Popen(
-                ["sh", "-c", script],
-                cwd=str(cwd_path),
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-                close_fds=True,
-            )
-        except OSError as exc:
-            raise ProcError(str(exc))
+    (pdir / "in.txt").touch()
 
     meta = {
         "id": proc_id,
         "argv": cmd,
-        "pid": proc.pid,
         "cwd": str(cwd_path),
         "created": datetime.now(timezone.utc).isoformat(),
-        "stdin": "file" if sys.platform == "win32" else "fifo",
     }
+    _write_json(pdir / "meta.json", meta)
+
+    env = pol.filtered_env()
+    # The filtered env drops AGENTS_TERMINAL_PROCS_DIR; the supervisor must see
+    # the same root or it would fall back to the default workspace procs dir.
+    env["AGENTS_TERMINAL_PROCS_DIR"] = str(_procs_root())
+    kwargs: dict[str, Any] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "env": env,
+        "close_fds": True,
+    }
+    if sys.platform == "win32":
+        # CREATE_NO_WINDOW detaches without a console. DETACHED_PROCESS would
+        # hand the child invalid std handles.
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+    else:
+        kwargs["start_new_session"] = True
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "agents_terminal.procsup", proc_id],
+            **kwargs,
+        )
+    except OSError as exc:
+        raise ProcError(str(exc))
+    meta["pid"] = proc.pid
     _write_json(pdir / "meta.json", meta)
     return {"id": proc_id, "pid": proc.pid, "state": "running", "dir": str(pdir)}
 
@@ -293,6 +276,11 @@ def _kill_tree(pid: int) -> None:
             capture_output=True,
             timeout=15,
         )
+        # taskkill returns before the kernel reaps the process; wait so callers
+        # see released log handles instead of a zombie handle table.
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and _pid_alive(pid):
+            time.sleep(0.1)
         return
     try:
         os.killpg(pid, signal.SIGTERM)
@@ -317,9 +305,14 @@ def _kill_tree(pid: int) -> None:
 def proc_kill(proc_id: str) -> dict[str, Any]:
     pdir = _load(proc_id)
     state = _proc_state(pdir)
-    if state["state"] == "exited":
+    if state["state"] == "exited" and (pdir / "exit.json").is_file():
         return {"id": proc_id, "state": "exited", "exit_code": state.get("exit_code")}
+    # Supervisor tree first; the recorded child_pid reaps a proc orphaned by a
+    # supervisor that died without taking the child down.
     _kill_tree(int(state.get("pid") or 0))
+    child_pid = int(state.get("child_pid") or 0)
+    if child_pid and _pid_alive(child_pid):
+        _kill_tree(child_pid)
     if not (pdir / "exit.json").is_file():
         _write_json(
             pdir / "exit.json",
@@ -330,9 +323,6 @@ def proc_kill(proc_id: str) -> dict[str, Any]:
 
 def proc_write(proc_id: str, data: str) -> dict[str, Any]:
     pdir = _load(proc_id)
-    meta = _read_json(pdir / "meta.json")
-    if meta.get("stdin") != "fifo":
-        raise ProcError("proc write unsupported on this platform (spawned without stdin feeder)", code=2)
     if _proc_state(pdir)["state"] != "running":
         raise ProcError("process exited")
     with open(pdir / "in.txt", "a", encoding="utf-8") as fh:

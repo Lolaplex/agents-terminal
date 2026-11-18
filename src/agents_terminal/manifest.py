@@ -343,12 +343,12 @@ def help_json() -> dict[str, Any]:
                 ),
             ),
             "proc": _command(
-                usage="agents-terminal proc <list|poll|wait|log|kill|write> [ID] [--stream out|err|both] [--tail N] [--timeout SEC] [--data TEXT] [--json]",
+                usage="agents-terminal proc <list|poll|wait|log|kill|write> [ID | --id ID] [--stream out|err|both] [--tail N] [--timeout SEC] [--data TEXT] [--json]",
                 description=(
                     "Manage background processes started with bg. "
                     "list: all procs. poll: state + exit code. wait: block until exit. "
                     "log: captured output. kill: terminate the tree. "
-                    "write: append data to the process stdin feed (posix only)."
+                    "write: append data to the process stdin feed."
                 ),
                 side_effects=mutating,
                 open_world=True,
@@ -362,7 +362,7 @@ def help_json() -> dict[str, Any]:
                         },
                         "id": {
                             "type": "string",
-                            "description": "proc_<id> returned by bg. Not needed for list.",
+                            "description": "proc_<id> returned by bg, passed as --id. Not needed for list.",
                         },
                         "data": {
                             "type": "string",

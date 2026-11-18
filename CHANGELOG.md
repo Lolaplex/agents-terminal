@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `bg -- <argv...>` spawns argv detached as a background process and prints `proc_<id>`. Per-proc state (`meta.json`, `out.log`, `err.log`, `in.txt`, `exit.json`) lives under `AGENTS_TERMINAL_PROCS_DIR` (default `<workspace>/procs`). POSIX wraps argv in a `tail -f in.txt | cmd` feeder so stdin stays writable; Windows runs a per-proc `.bat` and reports the child exit code.
-- `proc <action>` (alias `process`) manages background processes: `list`, `poll`, `wait --timeout SEC`, `log --stream out|err|both --tail N`, `kill` (kills the process tree; taskkill `/T` on Windows, process-group TERM→KILL on POSIX), `write --data TEXT` appends to the stdin feed (POSIX only; refused on Windows). Both commands are published via `--help-json` as mutating.
+- `bg -- <argv...>` spawns argv detached as a background process and prints `proc_<id>`. A per-proc `agents_terminal.procsup` supervisor execs argv with `shell=False` (no batch file or shell line, so metacharacters in arguments can never form a second command), feeds `in.txt` appends to the child stdin on every platform, and writes `exit.json` with the exact code. Per-proc state (`meta.json`, `out.log`, `err.log`, `in.txt`, `exit.json`) lives under `AGENTS_TERMINAL_PROCS_DIR` (default `<workspace>/procs`). `bg` is refused when the effective driver is openshell — a detached host process would bypass the sandbox; `driver=auto` resolves the same way `run` does.
+- `proc <action>` (alias `process`) manages background processes: `list`, `poll`, `wait --timeout SEC`, `log --stream out|err|both --tail N`, `kill` (kills the process tree; taskkill `/T` on Windows plus a KILL_ON_JOB_CLOSE job so a dead supervisor never orphans the child, process-group TERM→KILL on POSIX), `write --data TEXT` appends to the stdin feed on all platforms. `proc` accepts the id positionally or via `--id`. Both commands are published via `--help-json` as mutating.
 
 ### Changed
 - `.mailmap` maps legacy `Klix`/`Felix Kempf` author names to `Klix927` (no history rewrite; display only).

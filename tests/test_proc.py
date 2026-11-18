@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from agents_terminal import proc
+from agents_terminal.policy import Policy
 
 
 class TestProc(unittest.TestCase):
@@ -52,16 +53,32 @@ class TestProc(unittest.TestCase):
         with self.assertRaises(proc.ProcError):
             proc.proc_poll("proc_missing")
 
-    def test_write_refused_without_feeder(self) -> None:
-        if sys.platform != "win32":
-            self.skipTest("posix spawns a fifo feeder")
-        spawned = proc.bg_spawn([sys.executable, "-c", "import time; time.sleep(5)"])
+    def test_write_feeds_stdin(self) -> None:
+        code = "import sys; print(sys.stdin.readline().strip()); sys.stdout.flush()"
+        spawned = proc.bg_spawn([sys.executable, "-c", code])
         pid = spawned["id"]
         try:
-            with self.assertRaises(proc.ProcError):
-                proc.proc_write(pid, "x")
+            proc.proc_write(pid, "hello-stdin")
+            done = proc.proc_wait(pid, timeout_sec=30)
         finally:
             proc.proc_kill(pid)
+        self.assertEqual(done["exit_code"], 0)
+        self.assertIn("hello-stdin", proc.proc_log(pid)["stdout"])
+
+    def test_shell_metachars_stay_arguments(self) -> None:
+        """argv elements with cmd/sh metachars must never form a second command."""
+        pwned = Path(self._tmp.name) / "PWNED"
+        arg = f"x & echo PWNED > {pwned} & exit 1" if sys.platform == "win32" else f"x; echo PWNED > {pwned}"
+        spawned = proc.bg_spawn([sys.executable, "-c", "import sys; sys.exit(0)", arg])
+        pid = spawned["id"]
+        done = proc.proc_wait(pid, timeout_sec=30)
+        self.assertEqual(done["exit_code"], 0)
+        self.assertFalse(pwned.exists())
+
+    def test_openshell_driver_refused(self) -> None:
+        pol = Policy(driver="openshell")
+        with self.assertRaises(proc.ProcError):
+            proc.bg_spawn([sys.executable, "-c", "print(1)"], policy=pol)
 
 
 if __name__ == "__main__":

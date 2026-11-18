@@ -100,6 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
     proc_p = sub.add_parser("proc", aliases=["process"], help="Manage background processes")
     proc_p.add_argument("action", choices=["list", "poll", "wait", "log", "kill", "write"])
     proc_p.add_argument("id", nargs="?", default="", help="proc_<id> from bg")
+    proc_p.add_argument("--id", dest="id_opt", default="", help="proc_<id> (alternative to the positional arg)")
     proc_p.add_argument("--timeout", type=float, default=600, help="wait: max seconds (default 600)")
     proc_p.add_argument("--stream", default="both", choices=["out", "err", "both"], help="log: which stream")
     proc_p.add_argument("--tail", type=int, default=200, help="log/wait: max lines per stream")
@@ -242,25 +243,26 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if command in ("proc", "process"):
         action = args.action
+        proc_id = args.id_opt or args.id
         try:
             if action == "list":
                 payload = proc_list()
-            elif not args.id:
+            elif not proc_id:
                 print(f"proc {action} requires a process id", file=sys.stderr)
                 return 2
             elif action == "poll":
-                payload = proc_poll(args.id)
+                payload = proc_poll(proc_id)
             elif action == "wait":
-                payload = proc_wait(args.id, timeout_sec=args.timeout)
+                payload = proc_wait(proc_id, timeout_sec=args.timeout)
             elif action == "log":
-                payload = proc_log(args.id, stream=args.stream, tail=args.tail)
+                payload = proc_log(proc_id, stream=args.stream, tail=args.tail)
             elif action == "kill":
-                payload = proc_kill(args.id)
+                payload = proc_kill(proc_id)
             elif action == "write":
                 if args.data is None:
                     print("proc write requires --data", file=sys.stderr)
                     return 2
-                payload = proc_write(args.id, args.data)
+                payload = proc_write(proc_id, args.data)
         except ProcError as exc:
             print(exc.message, file=sys.stderr)
             return exc.code
