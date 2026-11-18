@@ -323,6 +323,71 @@ def help_json() -> dict[str, Any]:
                     ["argv"],
                 ),
             ),
+            "bg": _command(
+                usage="agents-terminal bg -- <argv...>",
+                description=(
+                    "Spawn argv detached as a background process and print its proc_<id>. "
+                    "Output lands in the proc dir logs; manage it with the proc command."
+                ),
+                side_effects=mutating,
+                open_world=True,
+                parameters=_object(
+                    {
+                        "argv": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Argv executed detached with no shell.",
+                        }
+                    },
+                    ["argv"],
+                ),
+            ),
+            "proc": _command(
+                usage="agents-terminal proc <list|poll|wait|log|kill|write> [ID | --id ID] [--stream out|err|both] [--tail N] [--timeout SEC] [--data TEXT] [--json]",
+                description=(
+                    "Manage background processes started with bg. "
+                    "list: all procs. poll: state + exit code. wait: block until exit. "
+                    "log: captured output. kill: terminate the tree. "
+                    "write: append data to the process stdin feed."
+                ),
+                side_effects=mutating,
+                open_world=True,
+                aliases=["process"],
+                parameters=_object(
+                    {
+                        "action": {
+                            "type": "string",
+                            "enum": ["list", "poll", "wait", "log", "kill", "write"],
+                            "description": "Proc action.",
+                        },
+                        "id": {
+                            "type": "string",
+                            "description": "proc_<id> returned by bg, passed as --id. Not needed for list.",
+                        },
+                        "data": {
+                            "type": "string",
+                            "description": "write: text appended to the process stdin feed.",
+                        },
+                        "stream": {
+                            "type": "string",
+                            "enum": ["out", "err", "both"],
+                            "default": "both",
+                            "description": "log: which stream.",
+                        },
+                        "tail": {
+                            "type": "integer",
+                            "default": 200,
+                            "description": "log/wait: max lines per stream.",
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "default": 600,
+                            "description": "wait: max seconds.",
+                        },
+                    },
+                    ["action"],
+                ),
+            ),
         },
         "flags": ["--help-json"],
     }
