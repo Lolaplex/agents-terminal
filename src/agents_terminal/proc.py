@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -128,6 +129,38 @@ def _tail(path: Path, max_lines: int) -> str:
     return "\n".join(lines)
 
 
+def strip_bg_marker(argv: list[str]) -> list[str] | None:
+    """Argv minus a trailing ``&`` background marker, or ``None``.
+
+    Handles ``[cmd, ..., "&"]``, a trailing-& single token (``["sleep", "5&"]``),
+    and a whole command as one string (``["sleep 5 &"]`` -> ``["sleep", "5"]``).
+    A multi-token string arg elsewhere (``bash -c 'x &'``) is left alone.
+    """
+    if not argv:
+        return None
+    last = str(argv[-1]).strip()
+    if not last.endswith("&"):
+        return None
+    out = [str(a) for a in argv[:-1]]
+    if last == "&":
+        return out
+    tail = last.rstrip("&").rstrip()
+    if not tail:
+        return out
+    if any(ch.isspace() for ch in last):
+        if len(argv) > 1:
+            return None
+        try:
+            out.extend(shlex.split(tail, posix=(os.name != "nt")))
+        except ValueError:
+            return None
+        return out
+    if tail.startswith("-"):
+        return None
+    out.append(tail)
+    return out
+
+
 def _effective_driver(pol: Policy) -> str:
     """Resolve ``auto`` the same way ``router.run_command`` does."""
     driver = pol.driver
@@ -150,6 +183,9 @@ def bg_spawn(argv: list[str], *, policy: Policy | None = None) -> dict[str, Any]
     if denied:
         raise ProcError(denied)
     cmd = [str(a) for a in argv if str(a)]
+    marked = strip_bg_marker(cmd)
+    if marked is not None:
+        cmd = marked
     if not cmd:
         raise ProcError("bg requires argv after --", code=2)
 

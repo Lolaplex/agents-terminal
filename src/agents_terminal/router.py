@@ -5,6 +5,7 @@ from __future__ import annotations
 from .driver import RunResult, run_argv
 from .openshell_driver import openshell_available, run_openshell
 from .policy import Policy
+from .proc import ProcError, bg_spawn, strip_bg_marker
 
 
 def run_command(
@@ -19,6 +20,19 @@ def run_command(
     driver = pol.driver
     if driver == "auto":
         driver = "openshell" if openshell_available() else "subprocess"
+    cmd = [str(x) for x in argv]
+    marked = strip_bg_marker(cmd)
+    if marked is not None:
+        try:
+            spawned = bg_spawn(marked, policy=pol)
+        except ProcError as exc:
+            return RunResult(argv=cmd, returncode=exc.code, stdout="", stderr=exc.message, denied=exc.message)
+        return RunResult(
+            argv=cmd,
+            returncode=0,
+            stdout=f"auto_backgrounded {spawned['id']} (manage with 'proc')",
+            stderr="",
+        )
     if driver == "openshell":
         if not openshell_available():
             msg = "openshell driver requested but openshell is not installed"

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `run` auto-backgrounds argv that ends in a `&` marker (`cmd &`, `cmd&`, or a single `"cmd args &"` string) via the `bg` machinery and returns an `auto_backgrounded proc_<id>` receipt instead of blocking. Opaque string args (e.g. `bash -c 'x &'`) are left alone. `bg` strips the same marker before spawning.
 - Signal-death explanations: `run`/`proc` results annotate signal-style exits — POSIX `-N` and shell `128+N` codes map to names (`SIGKILL: killed; likely OOM kill or external kill`), Windows NTSTATUS codes to `STATUS_*` names (`STATUS_ACCESS_VIOLATION`, `STATUS_CONTROL_C_EXIT`). `proc` payloads carry `exit_note`; text output appends it to `exit=N`.
 
 ### Changed
