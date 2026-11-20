@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator, TypedDict
 
+from .docextract import DocumentError, doc_kind, extract_text
+
 DEFAULT_READ_LIMIT = 2000
 MAX_READ_LIMIT = 20000
 MAX_READ_BYTES = 1_048_576
@@ -19,6 +21,7 @@ MAX_SCAN_BYTES = 8_388_608
 DEFAULT_GREP_MAX = 200
 MAX_GREP_MAX = 5000
 MAX_GREP_FILE_BYTES = 1_048_576
+MAX_DOC_BYTES = 67_108_864
 MAX_MATCH_CHARS = 2000
 MAX_PATTERN_CHARS = 1024
 MAX_PATH_CHARS = 4096
@@ -859,15 +862,31 @@ def _read_line_window(root_real: Path, path: Path, *, offset: int, limit: int) -
                 break
             raw += chunk
         eof = not os.read(fd, 1)
-        encoding = _detect_utf16(bytes(raw[:512])) or "utf-8"
-        if encoding.startswith("utf-16"):
-            text = bytes(raw).decode(encoding, errors="replace").lstrip("\ufeff")
+        head = bytes(raw[:512])
+        kind = doc_kind(head, path.name)
+        if kind:
+            while len(raw) < MAX_DOC_BYTES:
+                chunk = os.read(fd, min(1_048_576, MAX_DOC_BYTES - len(raw)))
+                if not chunk:
+                    break
+                raw += chunk
+            eof = not os.read(fd, 1)
+            try:
+                text = extract_text(kind, bytes(raw))
+            except DocumentError as exc:
+                raise ReadonlyError(str(exc)) from exc
             lines = [s.encode("utf-8") for s in text.splitlines(keepends=True)]
+            encoding = kind
         else:
-            lines = bytes(raw).splitlines(keepends=True)
-            for line in lines:
-                if b"\x00" in line:
-                    raise ReadonlyError(_BINARY)
+            encoding = _detect_utf16(head) or "utf-8"
+            if encoding.startswith("utf-16"):
+                text = bytes(raw).decode(encoding, errors="replace").lstrip("\ufeff")
+                lines = [s.encode("utf-8") for s in text.splitlines(keepends=True)]
+            else:
+                lines = bytes(raw).splitlines(keepends=True)
+                for line in lines:
+                    if b"\x00" in line:
+                        raise ReadonlyError(_BINARY)
         selected: list[bytes] = []
         output_bytes = 0
         truncated = not eof
