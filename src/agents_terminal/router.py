@@ -6,6 +6,7 @@ from .driver import RunResult, run_argv
 from .openshell_driver import openshell_available, run_openshell
 from .policy import Policy
 from .proc import ProcError, bg_spawn, strip_bg_marker
+from .ssh_driver import run_ssh
 
 
 def run_command(
@@ -38,4 +39,6 @@ def run_command(
             msg = "openshell driver requested but openshell is not installed"
             return RunResult(argv=list(argv), returncode=127, stdout="", stderr=msg, denied=msg)
         return run_openshell(argv, policy=pol, read=read, write=write, net=net)
+    if driver == "ssh":
+        return run_ssh(cmd, policy=pol, read=read, write=write, net=net)
     return run_argv(argv, policy=pol, read=read, write=write, net=net)

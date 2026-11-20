@@ -176,7 +176,7 @@ def bg_spawn(argv: list[str], *, policy: Policy | None = None) -> dict[str, Any]
     driver = _effective_driver(pol)
     if driver != "subprocess":
         raise ProcError(
-            "bg requires the subprocess driver; a detached host process would bypass openshell",
+            f"bg requires the subprocess driver; a detached host process would bypass the {driver} jail",
             code=2,
         )
     denied = pol.check_request(read=False, write=False, net=False)

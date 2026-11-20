@@ -6,11 +6,13 @@ Configuration rule: one variable carries one decision. A value never implies enf
 
 ## Driver
 
-`AGENTS_TERMINAL_DRIVER` is `auto` (default), `subprocess`, or `openshell`.
+`AGENTS_TERMINAL_DRIVER` is `auto` (default), `subprocess`, `openshell`, or `ssh`.
 
-`auto`: `openshell` when `openshell_available()` is true, else `subprocess`. On Windows, availability includes `openshell` inside WSL.
+`auto`: `openshell` when `openshell_available()` is true, else `subprocess`. On Windows, availability includes `openshell` inside WSL. `auto` never picks `ssh`.
 
 Requesting `openshell` when the binary is missing is an error. It does not silently fall back.
+
+`ssh` runs argv on a remote host: `AGENTS_TERMINAL_SSH_HOST` (required), `AGENTS_TERMINAL_SSH_USER`, `AGENTS_TERMINAL_SSH_KEY`, `AGENTS_TERMINAL_SSH_PORT`, `AGENTS_TERMINAL_SSH_DIR`. BatchMode is on (no password prompts); each argv element is `shlex.quote`d into one remote line.
 
 ## Environment
 

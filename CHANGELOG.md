@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `ssh` driver (`AGENTS_TERMINAL_DRIVER=ssh`): runs argv on a remote host via `ssh -o BatchMode=yes`. Env config `AGENTS_TERMINAL_SSH_HOST` (required), `_USER`, `_KEY`, `_PORT`, `_DIR` (remote workdir). Each argv element is `shlex.quote`d; `auto` never selects ssh. `bg` still refuses off the subprocess driver.
 - `read` extracts text from PDF and DOCX files (stdlib only: ZIP+XML for DOCX paragraphs, zlib-stream `Tj`/`TJ` operators for PDF). Payload `encoding` reports `pdf`/`docx`; unreadable documents refuse with `unreadable document`. Extraction is capped at 64 MB.
 - `read` transcodes UTF-16 files (LE/BE, BOM or NUL-density heuristic) to UTF-8 instead of refusing them as binary. The JSON payload reports `encoding` (`utf-8`, `utf-16-le`, `utf-16-be`). Short binary blobs still refuse.
 - `run` auto-backgrounds argv that ends in a `&` marker (`cmd &`, `cmd&`, or a single `"cmd args &"` string) via the `bg` machinery and returns an `auto_backgrounded proc_<id>` receipt instead of blocking. Opaque string args (e.g. `bash -c 'x &'`) are left alone. `bg` strips the same marker before spawning.
