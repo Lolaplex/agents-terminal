@@ -100,7 +100,8 @@ def _pid_alive(pid: int) -> bool:
 def _proc_state(pdir: Path) -> dict[str, Any]:
     meta = _read_json(pdir / "meta.json")
     code = _read_exit_code(pdir)
-    finished = _read_json(pdir / "exit.json").get("finished") or ""
+    exit_data = _read_json(pdir / "exit.json")
+    finished = exit_data.get("finished") or ""
     pid = int(meta.get("pid") or 0)
     child_pid = int(meta.get("child_pid") or 0)
     running = code is None and (_pid_alive(pid) or _pid_alive(child_pid))
@@ -111,10 +112,12 @@ def _proc_state(pdir: Path) -> dict[str, Any]:
         "child_pid": child_pid,
         "cwd": meta.get("cwd") or "",
         "created": meta.get("created") or "",
+        "pty": bool(meta.get("pty")),
         "state": "running" if running else "exited",
         "exit_code": code,
         "exit_note": explain_exit(code),
         "finished": finished,
+        "error": exit_data.get("error"),
     }
 
 
@@ -171,7 +174,7 @@ def _effective_driver(pol: Policy) -> str:
     return driver
 
 
-def bg_spawn(argv: list[str], *, policy: Policy | None = None) -> dict[str, Any]:
+def bg_spawn(argv: list[str], *, policy: Policy | None = None, pty: bool = False) -> dict[str, Any]:
     pol = policy or Policy.load()
     driver = _effective_driver(pol)
     if driver != "subprocess":
@@ -212,6 +215,7 @@ def bg_spawn(argv: list[str], *, policy: Policy | None = None) -> dict[str, Any]
         "argv": cmd,
         "cwd": str(cwd_path),
         "created": datetime.now(timezone.utc).isoformat(),
+        "pty": bool(pty),
     }
     _write_json(pdir / "meta.json", meta)
 

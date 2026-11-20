@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `bg --pty` runs the child on a pseudo-terminal (POSIX only): merged stdin/stdout/stderr stream lands in `out.log`, `proc write` types into the tty. Enables TUIs and interactive tools. Windows refuses with `pty mode requires a POSIX host`. `proc` payloads carry `pty` and `error` fields.
 - `ssh` driver (`AGENTS_TERMINAL_DRIVER=ssh`): runs argv on a remote host via `ssh -o BatchMode=yes`. Env config `AGENTS_TERMINAL_SSH_HOST` (required), `_USER`, `_KEY`, `_PORT`, `_DIR` (remote workdir). Each argv element is `shlex.quote`d; `auto` never selects ssh. `bg` still refuses off the subprocess driver.
 - `read` extracts text from PDF and DOCX files (stdlib only: ZIP+XML for DOCX paragraphs, zlib-stream `Tj`/`TJ` operators for PDF). Payload `encoding` reports `pdf`/`docx`; unreadable documents refuse with `unreadable document`. Extraction is capped at 64 MB.
 - `read` transcodes UTF-16 files (LE/BE, BOM or NUL-density heuristic) to UTF-8 instead of refusing them as binary. The JSON payload reports `encoding` (`utf-8`, `utf-16-le`, `utf-16-be`). Short binary blobs still refuse.

@@ -95,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     bg_p = sub.add_parser("bg", help="Spawn argv detached as a background process (mutating)")
     bg_p.add_argument("argv", nargs=argparse.REMAINDER, help="Command after --")
+    bg_p.add_argument("--pty", action="store_true", help="Run the child on a pty (POSIX only).")
     bg_p.add_argument("--json", action="store_true", help="Emit JSON on stdout.")
 
     proc_p = sub.add_parser("proc", aliases=["process"], help="Manage background processes")
@@ -232,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         if raw and raw[0] == "--":
             raw = raw[1:]
         try:
-            payload = bg_spawn(raw)
+            payload = bg_spawn(raw, pty=args.pty)
         except ProcError as exc:
             print(exc.message, file=sys.stderr)
             return exc.code

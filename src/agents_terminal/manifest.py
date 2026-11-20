@@ -324,10 +324,11 @@ def help_json() -> dict[str, Any]:
                 ),
             ),
             "bg": _command(
-                usage="agents-terminal bg -- <argv...>",
+                usage="agents-terminal bg [--pty] -- <argv...>",
                 description=(
                     "Spawn argv detached as a background process and print its proc_<id>. "
-                    "Output lands in the proc dir logs; manage it with the proc command."
+                    "Output lands in the proc dir logs; manage it with the proc command. "
+                    "--pty runs the child on a pseudo-terminal (POSIX only) for TUIs and interactive tools."
                 ),
                 side_effects=mutating,
                 open_world=True,
@@ -337,7 +338,12 @@ def help_json() -> dict[str, Any]:
                             "type": "array",
                             "items": {"type": "string"},
                             "description": "Argv executed detached with no shell.",
-                        }
+                        },
+                        "pty": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": "Run on a pseudo-terminal; stdin/out/err merge into out.log.",
+                        },
                     },
                     ["argv"],
                 ),
