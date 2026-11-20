@@ -127,7 +127,7 @@ def help_json() -> dict[str, Any]:
             "read": _command(
                 usage="agents-terminal read PATH [--offset N] [--limit N] [--json]",
                 description=(
-                    "Read a UTF-8 text file inside the workspace root. "
+                    "Read a UTF-8 text file inside the workspace root; UTF-16 files are transcoded to UTF-8. "
                     "offset is the 1-based starting line. limit is the maximum number of lines."
                 ),
                 side_effects=read_only,

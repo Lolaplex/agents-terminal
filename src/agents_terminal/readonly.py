@@ -66,6 +66,7 @@ class ReadResult(TypedDict):
     line_count: int
     truncated: bool
     content: str
+    encoding: str
 
 
 class GrepMatch(TypedDict):
@@ -107,14 +108,14 @@ def read_file(
     offset: int = 1,
     limit: int = DEFAULT_READ_LIMIT,
 ) -> ReadResult:
-    """Read a regular UTF-8 text file. ``offset`` is the 1-based starting line."""
+    """Read a regular UTF-8 text file; UTF-16 files are transcoded to UTF-8."""
     offset = _bounded_int(offset, name="offset", upper=10**9)
     limit = _bounded_int(limit, name="limit", upper=MAX_READ_LIMIT)
     root_real = _prepare_root(root)
     target = resolve_path(root_real, path, follow_final=True)
     if not target.exists():
         raise ReadonlyError(_NOT_FOUND)
-    selected, truncated = _read_line_window(root_real, target, offset=offset, limit=limit)
+    selected, truncated, encoding = _read_line_window(root_real, target, offset=offset, limit=limit)
     content = b"".join(selected).decode("utf-8", errors="replace")
     return {
         "path": _rel(root_real, target),
@@ -123,6 +124,7 @@ def read_file(
         "line_count": len(selected),
         "truncated": truncated,
         "content": content,
+        "encoding": encoding,
     }
 
 
@@ -824,28 +826,58 @@ def _iter_capped_lines(fd: int, max_bytes: int, state: dict[str, bool]) -> Itera
         yield pending
 
 
-def _read_line_window(root_real: Path, path: Path, *, offset: int, limit: int) -> tuple[list[bytes], bool]:
+def _detect_utf16(head: bytes) -> str | None:
+    """``utf-16-le``/``utf-16-be`` when the head bytes look like UTF-16 text.
+
+    BOM wins. Otherwise NUL bytes on the odd positions mean LE text, on the
+    even positions BE text; a minimum density keeps short binary blobs out.
+    """
+    if head.startswith(b"\xff\xfe"):
+        return "utf-16-le"
+    if head.startswith(b"\xfe\xff"):
+        return "utf-16-be"
+    sample = head[:512]
+    pairs = len(sample) // 2
+    if pairs < 8:
+        return None
+    nul_even = sum(1 for i in range(0, pairs * 2, 2) if sample[i] == 0)
+    nul_odd = sum(1 for i in range(1, pairs * 2, 2) if sample[i] == 0)
+    floor = max(4, pairs // 4)
+    if nul_odd >= floor and nul_odd > nul_even * 4:
+        return "utf-16-le"
+    if nul_even >= floor and nul_even > nul_odd * 4:
+        return "utf-16-be"
+    return None
+
+
+def _read_line_window(root_real: Path, path: Path, *, offset: int, limit: int) -> tuple[list[bytes], bool, str]:
     with _open_regular(path, root_real=root_real) as (fd, _st):
-        state: dict[str, bool] = {}
+        raw = bytearray()
+        while len(raw) < MAX_SCAN_BYTES:
+            chunk = os.read(fd, min(65536, MAX_SCAN_BYTES - len(raw)))
+            if not chunk:
+                break
+            raw += chunk
+        eof = not os.read(fd, 1)
+        encoding = _detect_utf16(bytes(raw[:512])) or "utf-8"
+        if encoding.startswith("utf-16"):
+            text = bytes(raw).decode(encoding, errors="replace").lstrip("\ufeff")
+            lines = [s.encode("utf-8") for s in text.splitlines(keepends=True)]
+        else:
+            lines = bytes(raw).splitlines(keepends=True)
+            for line in lines:
+                if b"\x00" in line:
+                    raise ReadonlyError(_BINARY)
         selected: list[bytes] = []
         output_bytes = 0
-        seen = 0
-        truncated = False
-        for line in _iter_capped_lines(fd, MAX_SCAN_BYTES, state):
-            if b"\x00" in line:
-                raise ReadonlyError(_BINARY)
-            seen += 1
-            if seen < offset:
-                continue
+        truncated = not eof
+        for line in lines[offset - 1 :]:
             if len(selected) >= limit or output_bytes + len(line) > MAX_READ_BYTES:
                 truncated = True
                 break
             selected.append(line)
             output_bytes += len(line)
-        else:
-            if not state.get("eof", False):
-                truncated = True
-        return selected, truncated
+        return selected, truncated, encoding
 
 
 def _iter_search_files(root_real: Path, start: Path) -> Iterator[Path]:
