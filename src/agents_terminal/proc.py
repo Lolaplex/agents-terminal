@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .exitinfo import explain_exit
 from .policy import Policy
 
 
@@ -111,6 +112,7 @@ def _proc_state(pdir: Path) -> dict[str, Any]:
         "created": meta.get("created") or "",
         "state": "running" if running else "exited",
         "exit_code": code,
+        "exit_note": explain_exit(code),
         "finished": finished,
     }
 
@@ -338,11 +340,14 @@ def format_proc(payload: dict[str, Any]) -> str:
         lines = []
         for r in rows:
             code = "" if r["exit_code"] is None else f" exit={r['exit_code']}"
+            if r.get("exit_note"):
+                code += f" ({r['exit_note']})"
             lines.append(f"{r['id']}\t{r['state']}{code}\t{' '.join(r['argv'])}")
         return "\n".join(lines)
     parts = [f"{payload.get('id', '')} {payload.get('state', '')}"]
     if payload.get("exit_code") is not None:
-        parts.append(f"exit={payload['exit_code']}")
+        suffix = f" ({payload['exit_note']})" if payload.get("exit_note") else ""
+        parts.append(f"exit={payload['exit_code']}{suffix}")
     if payload.get("timed_out"):
         parts.append("(wait timed out, still running)")
     for key in ("stdout", "stderr"):

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Signal-death explanations: `run`/`proc` results annotate signal-style exits — POSIX `-N` and shell `128+N` codes map to names (`SIGKILL: killed; likely OOM kill or external kill`), Windows NTSTATUS codes to `STATUS_*` names (`STATUS_ACCESS_VIOLATION`, `STATUS_CONTROL_C_EXIT`). `proc` payloads carry `exit_note`; text output appends it to `exit=N`.
+
 ### Changed
 - `policy._internal_roots()` now delegates to `agents_workspace.allowed_roots()` (single source for the lock allow list); the terminal still prepends the active workdir. Behaviour unchanged.
 - Tests pin `AGENTS_HOST_DIR` instead of the removed `AGENTS_HOME` alias; the internal-dirs fixture reads host infra (`run/`) rather than the host root, matching the host-is-infra-only model.

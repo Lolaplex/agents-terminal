@@ -8,6 +8,7 @@ import sys
 from dataclasses import dataclass
 from typing import Sequence
 
+from .exitinfo import explain_exit
 from .policy import Policy, refuse_workspace
 
 
@@ -32,8 +33,13 @@ def format_result(result: RunResult) -> str:
         parts.append(result.stderr.rstrip("\n"))
     if result.timed_out:
         parts.append(f"(timed out after policy limit, exit {result.returncode})")
-    elif result.returncode != 0 and not parts:
-        parts.append(f"(exit {result.returncode})")
+    elif result.returncode != 0:
+        note = explain_exit(result.returncode)
+        suffix = f" ({note})" if note else ""
+        if not parts:
+            parts.append(f"(exit {result.returncode}{suffix})")
+        elif note:
+            parts.append(f"(exit {result.returncode}{suffix})")
     return "\n".join(parts) if parts else ""
 
 
