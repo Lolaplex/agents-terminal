@@ -15,6 +15,8 @@ Set `AGENTS_TERMINAL_DRIVER=openshell|subprocess|ssh|auto` or policy JSON `"driv
 
 `ssh` config: `AGENTS_TERMINAL_SSH_HOST` (required), `AGENTS_TERMINAL_SSH_USER`, `AGENTS_TERMINAL_SSH_KEY`, `AGENTS_TERMINAL_SSH_PORT`, `AGENTS_TERMINAL_SSH_DIR` (remote workdir). `auto` never picks ssh. `bg` refuses on ssh (detached remote procs unsupported).
 
+`bg` extras: `--pty` runs on a pseudo-terminal (POSIX only). `AGENTS_TERMINAL_NOTIFY_URL` posts a JSON exit+tail webhook on completion (relay `/v1/alert` style); `AGENTS_TERMINAL_NOTIFY_SECRET` adds the `X-Relay-Secret` header. `run` auto-backgrounds a trailing `&`.
+
 ## OpenShell install (sandbox / Docker)
 
 Cache-local install (no system `dpkg`, no `~/.agents`):

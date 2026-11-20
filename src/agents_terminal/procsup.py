@@ -157,6 +157,7 @@ def _supervise_pty(pdir: Path, meta: dict, argv: list[str], cwd: str | None) -> 
     os.close(master)
     code = int(child.wait())
     _write_json(pdir / "exit.json", {"code": code, "finished": _now()})
+    _notify_exit(pdir, str(meta.get("id") or pdir.name), argv, code)
     return code
 
 
@@ -214,6 +215,7 @@ def supervise(proc_id: str) -> int:
             pdir / "exit.json",
             {"code": code, "finished": _now()},
         )
+        _notify_exit(pdir, proc_id, argv, code)
         return code
     finally:
         if kernel32 and job:
@@ -222,6 +224,66 @@ def supervise(proc_id: str) -> int:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _notify_exit(pdir: Path, proc_id: str, argv: list, code: int) -> None:
+    """POST the exit + log tail to AGENTS_TERMINAL_NOTIFY_URL.
+
+    The relay `/v1/alert` (or any webhook) receives one JSON body; the agent
+    gets a pushed message instead of burning model calls on idle `proc poll`
+    loops. Failures land in exit.json `notify_error`; they never fail the proc.
+    """
+    url = os.environ.get("AGENTS_TERMINAL_NOTIFY_URL", "").strip()
+    if not url:
+        return
+    from .exitinfo import explain_exit
+
+    note = explain_exit(code)
+    tail = _tail_lines(pdir / "out.log", 40)
+    err_tail = _tail_lines(pdir / "err.log", 20)
+    text = f"bg proc {proc_id} exited (code {code}{': ' + note if note else ''})"
+    body = {
+        "text": text,
+        "proc": proc_id,
+        "argv": argv,
+        "code": code,
+        "stdout_tail": tail,
+        "stderr_tail": err_tail,
+    }
+    secret = os.environ.get("AGENTS_TERMINAL_NOTIFY_SECRET", "").strip()
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if secret:
+        headers["X-Relay-Secret"] = secret
+    error = ""
+    try:
+        import urllib.request
+
+        req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status >= 400:
+                error = f"notify http {resp.status}"
+    except Exception as exc:
+        error = f"notify failed: {exc.__class__.__name__} {exc}"[:200]
+    try:
+        data = _read_json(pdir / "exit.json")
+        data["notified"] = not error
+        if error:
+            data["notify_error"] = error
+        _write_json(pdir / "exit.json", data)
+    except OSError:
+        pass
+
+
+def _tail_lines(path: Path, max_lines: int) -> str:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    lines = text.splitlines()
+    if max_lines > 0:
+        lines = lines[-max_lines:]
+    tail = "\n".join(lines)
+    return tail[-4000:]
 
 
 def main(argv: list[str] | None = None) -> int:

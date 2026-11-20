@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Notify-on-complete: when `AGENTS_TERMINAL_NOTIFY_URL` is set, the `bg` supervisor POSTs one JSON (`text`, `proc`, `argv`, `code`, `stdout_tail`, `stderr_tail`) to that webhook on child exit — e.g. a relay `/v1/alert` — so a finished proc lands as a message instead of burning model calls on idle `proc poll` loops. `AGENTS_TERMINAL_NOTIFY_SECRET` sends an `X-Relay-Secret` header. `proc` payloads report `notified`/`notify_error`; delivery failures never fail the proc.
 - `abi/OPENSHELL-BG.md`: investigation of an openshell-backed `bg`. Persistent named sandboxes (`sandbox create --detach`) plus `sandbox exec` and tar-over-SSH `download` cover the proc model; recommendation is a persistent sandbox behind an opt-in env switch, pending verification on a real gateway host. Refusal stays in place meanwhile.
 - `bg --pty` runs the child on a pseudo-terminal (POSIX only): merged stdin/stdout/stderr stream lands in `out.log`, `proc write` types into the tty. Enables TUIs and interactive tools. Windows refuses with `pty mode requires a POSIX host`. `proc` payloads carry `pty` and `error` fields.
 - `ssh` driver (`AGENTS_TERMINAL_DRIVER=ssh`): runs argv on a remote host via `ssh -o BatchMode=yes`. Env config `AGENTS_TERMINAL_SSH_HOST` (required), `_USER`, `_KEY`, `_PORT`, `_DIR` (remote workdir). Each argv element is `shlex.quote`d; `auto` never selects ssh. `bg` still refuses off the subprocess driver.

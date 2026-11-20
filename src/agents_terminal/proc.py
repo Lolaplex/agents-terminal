@@ -118,6 +118,8 @@ def _proc_state(pdir: Path) -> dict[str, Any]:
         "exit_note": explain_exit(code),
         "finished": finished,
         "error": exit_data.get("error"),
+        "notified": exit_data.get("notified"),
+        "notify_error": exit_data.get("notify_error"),
     }
 
 
@@ -216,6 +218,7 @@ def bg_spawn(argv: list[str], *, policy: Policy | None = None, pty: bool = False
         "cwd": str(cwd_path),
         "created": datetime.now(timezone.utc).isoformat(),
         "pty": bool(pty),
+        "notify": bool(os.environ.get("AGENTS_TERMINAL_NOTIFY_URL", "").strip()),
     }
     _write_json(pdir / "meta.json", meta)
 
@@ -223,6 +226,10 @@ def bg_spawn(argv: list[str], *, policy: Policy | None = None, pty: bool = False
     # The filtered env drops AGENTS_TERMINAL_PROCS_DIR; the supervisor must see
     # the same root or it would fall back to the default workspace procs dir.
     env["AGENTS_TERMINAL_PROCS_DIR"] = str(_procs_root())
+    for key in ("AGENTS_TERMINAL_NOTIFY_URL", "AGENTS_TERMINAL_NOTIFY_SECRET"):
+        val = os.environ.get(key, "").strip()
+        if val:
+            env[key] = val
     kwargs: dict[str, Any] = {
         "stdin": subprocess.DEVNULL,
         "stdout": subprocess.DEVNULL,
