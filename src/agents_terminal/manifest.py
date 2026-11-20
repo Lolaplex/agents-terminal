@@ -98,6 +98,7 @@ def help_json() -> dict[str, Any]:
     data = {
         "name": "agents-terminal",
         "version": __version__,
+        "cordis_expose": True,
         "description": (
             "Policy-bound jailed terminal. "
             "Read-only commands observe the workspace root and do not spawn a process."
