@@ -79,6 +79,31 @@ class TestNotify(unittest.TestCase):
         state = proc.proc_poll(pid)
         self.assertTrue(state.get("notified"))
 
+    def test_child_env_strips_notify_url_and_secret(self) -> None:
+        code = (
+            "import json, os; "
+            "print(json.dumps({"
+            "'url': os.environ.get('AGENTS_TERMINAL_NOTIFY_URL'), "
+            "'sec': os.environ.get('AGENTS_TERMINAL_NOTIFY_SECRET')"
+            "}))"
+        )
+        spawned = proc.bg_spawn([sys.executable, "-c", code])
+        pid = spawned["id"]
+        done = proc.proc_wait(pid, timeout_sec=30)
+        self.assertEqual(done["exit_code"], 0)
+        log = proc.proc_log(pid, stream="out")
+        seen = json.loads(log["stdout"].strip())
+        self.assertIsNone(seen["url"])
+        self.assertIsNone(seen["sec"])
+        deadline_posts = 30
+        while not _Sink.posts and deadline_posts:
+            import time
+
+            time.sleep(0.2)
+            deadline_posts -= 1
+        self.assertTrue(_Sink.posts)
+        self.assertEqual(_Sink.posts[0]["secret"], "s3cr3t")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
 
-from agents_workspace import Workspace, allowed_roots
+try:
+    from agents_workspace import Host, Workspace, allowed_roots, denied_paths
+    from agents_workspace.compat import read_alias as _read_alias
+except ImportError:
+    Host = None  # type: ignore[assignment]
+    Workspace = None  # type: ignore[assignment]
+    allowed_roots = None  # type: ignore[assignment]
+    denied_paths = None  # type: ignore[assignment]
+
+    def _read_alias(env, new: str, old: str) -> str:  # type: ignore[misc]
+        src = os.environ if env is None else env
+        return str(src.get(new) or src.get(old) or "").strip()
 
 _DEFAULT_ENV_ALLOW = (
     "PATH",
@@ -24,8 +35,6 @@ _DEFAULT_ENV_ALLOW = (
     "LANG",
     "LC_ALL",
     "TERM",
-    "GITHUB_TOKEN",
-    "GH_TOKEN",
     "GIT_AUTHOR_NAME",
     "GIT_AUTHOR_EMAIL",
     "GIT_COMMITTER_NAME",
@@ -57,6 +66,8 @@ class Policy:
         if allow is None:
             extra_env = os.environ.get("AGENTS_TERMINAL_ENV_ALLOW") or os.environ.get("AGENTS_TERMINAL_EXTRA_ENV", "")
             base = list(_DEFAULT_ENV_ALLOW)
+            if _flag("AGENTS_TERMINAL_ALLOW_GH_TOKEN"):
+                base.extend(["GITHUB_TOKEN", "GH_TOKEN"])
             if extra_env.strip():
                 base.extend([x.strip() for x in extra_env.split(",") if x.strip()])
             allow = base
@@ -105,7 +116,9 @@ class Policy:
         raw = _read_alias(None, "AGENTS_WORKDIR", "AGENTS_WORKSPACE_DIR")
         if raw:
             return Path(raw).expanduser().resolve()
-        return Workspace.from_env().workdir.resolve()
+        if Workspace is not None:
+            return Workspace.from_env().workdir.resolve()
+        return Path.cwd().resolve()
 
     # deprecated aliases, one release
     def work_root(self) -> Path:
@@ -124,9 +137,6 @@ _WIN_ABS = re.compile(r"[A-Za-z]:[\\/][^\"'\s),;]+")
 _UNC = re.compile(r"\\\\[^\"'\s),;]+")
 _EMBED_REL = re.compile(r"(?:^|[\s\"'=])(\.\.[\\/][^\"'\s),;]*)")
 _POSIX_ABS = re.compile(r"(?:^|[\s\"'=])(/[^\"'\s),;]+)")
-
-
-from agents_workspace.compat import read_alias as _read_alias
 
 
 def _flag(name: str) -> bool:
@@ -158,11 +168,8 @@ def workdir_root() -> Path | None:
         return path
 
 
-def _path_key(path: Path) -> str:
-    try:
-        text = os.path.normcase(os.path.normpath(str(path.expanduser().resolve(strict=False))))
-    except (OSError, RuntimeError):
-        return ""
+def _normalize_key(raw: str) -> str:
+    text = os.path.normcase(os.path.normpath(raw))
     for prefix in ("\\\\?\\unc\\", "\\\\?\\"):
         if text.startswith(prefix):
             text = text[len(prefix) :]
@@ -170,15 +177,89 @@ def _path_key(path: Path) -> str:
     return text
 
 
-def _under(root: Path, path: Path) -> bool:
+def _path_key(path: Path, *, follow_symlinks: bool = True) -> str:
+    try:
+        expanded = path.expanduser()
+        if follow_symlinks:
+            resolved = expanded.resolve(strict=False)
+        elif expanded.name and expanded.parent != expanded:
+            resolved = expanded.parent.resolve(strict=False) / expanded.name
+        else:
+            resolved = expanded.resolve(strict=False)
+        return _normalize_key(str(resolved))
+    except (OSError, RuntimeError):
+        return ""
+
+
+def _under(root: Path, path: Path, *, follow_symlinks: bool = True) -> bool:
     root_s = _path_key(root)
-    child_s = _path_key(path)
+    child_s = _path_key(path, follow_symlinks=follow_symlinks)
     if not root_s or not child_s:
         return False
     if child_s == root_s:
         return True
     prefix = root_s if root_s.endswith(os.sep) else root_s + os.sep
     return child_s.startswith(prefix)
+
+
+def _host_dir_fallback() -> Path:
+    raw = os.environ.get("AGENTS_HOST_DIR", "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+def _denied_spec() -> tuple[Path | None, list[Path]]:
+    """Resolved host dir and denied paths (``agents_workspace.denied_paths`` + fallback)."""
+    if Workspace is not None and denied_paths is not None:
+        try:
+            ws = Workspace.from_env()
+            return ws.host.dir, list(denied_paths(ws))
+        except (OSError, RuntimeError, ValueError):
+            pass
+    host_dir = Host.from_env().dir if Host is not None else _host_dir_fallback()
+    items = [
+        host_dir / "keys",
+        host_dir / "secrets.json",
+        host_dir / "secrets",
+        host_dir / "mcp.json",
+        host_dir / "mcp",
+        host_dir / "agents.json",
+        host_dir / "users.json",
+        host_dir / "approval-allowlist.json",
+    ]
+    raw_ws = os.environ.get("AGENTS_WORKSPACE_ROOT", "").strip()
+    if raw_ws:
+        ws_root = Path(raw_ws).expanduser()
+        items.extend([ws_root / "secrets.json", ws_root / "members.json"])
+    return host_dir, items
+
+
+def is_denied_path(path: Path, *, follow_symlinks: bool = True) -> bool:
+    """True when ``path`` resolves to host secrets/keys/control-plane or ws secrets/members."""
+    target_key = _path_key(path, follow_symlinks=follow_symlinks)
+    if not target_key:
+        return True
+    host_dir, items = _denied_spec()
+    for blocked in items:
+        if _under(blocked, path, follow_symlinks=follow_symlinks):
+            return True
+    if host_dir is not None:
+        host_key = _path_key(host_dir)
+        if host_key:
+            prefix = host_key if host_key.endswith(os.sep) else host_key + os.sep
+            if target_key.startswith(prefix):
+                rel = target_key[len(prefix) :]
+                parts = [p for p in rel.split(os.sep) if p]
+                if parts and parts[0].lower().startswith("secrets"):
+                    return True
+                if (
+                    len(parts) >= 3
+                    and parts[0].lower() == "workspaces"
+                    and parts[2].lower() in ("secrets.json", "members.json")
+                ):
+                    return True
+    return False
 
 
 def _internal_roots() -> list[Path]:
@@ -188,11 +269,19 @@ def _internal_roots() -> list[Path]:
     host infra, env-listed dirs, allow list); the terminal adds the active
     workdir. Host memory/skills do not exist — never allowed (D-host-layer).
     """
-    ws = Workspace.from_env()
-    return [ws.workdir, *allowed_roots(ws)]
+    if Workspace is not None and allowed_roots is not None:
+        try:
+            ws = Workspace.from_env()
+            return [ws.workdir, *allowed_roots(ws)]
+        except (OSError, RuntimeError, ValueError):
+            return []
+    allow = _read_alias(None, "AGENTS_WORKDIR_ALLOW", "AGENTS_WORKSPACE_ALLOW")
+    return [Path(part.strip()).expanduser() for part in allow.split(os.pathsep) if part.strip()]
 
 
 def _permitted(path: Path, root: Path) -> bool:
+    if is_denied_path(path):
+        return False
     if _under(root, path):
         return True
     for base in _internal_roots():

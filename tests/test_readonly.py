@@ -530,7 +530,8 @@ class TestCli(TestCase):
         self.assertEqual(json.loads(out)["type"], "file")
 
     def test_run_still_executes_and_help_json_classifies_it(self) -> None:
-        code, out, _err = self._run(["run", "--", "echo", "hi"])
+        cmd = ["cmd", "/c", "echo", "hi"] if sys.platform == "win32" else ["echo", "hi"]
+        code, out, _err = self._run(["run", "--", *cmd])
         self.assertEqual(code, 0)
         self.assertIn("hi", out)
         code, out, _err = self._run(["--help-json"])
