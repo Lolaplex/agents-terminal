@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Iterator, TypedDict
 
 from .docextract import DocumentError, doc_kind, extract_text
+from .policy import is_denied_path
 
 DEFAULT_READ_LIMIT = 2000
 MAX_READ_LIMIT = 20000
@@ -256,12 +257,17 @@ def resolve_path(root: Path, user_path: str, *, follow_final: bool) -> Path:
             raise ReadonlyError(_NOT_FOUND)
         if not parent_real.is_dir():
             raise ReadonlyError(_NOT_DIR)
-        return parent_real / name
+        target = parent_real / name
+        if is_denied_path(target, follow_symlinks=False):
+            raise ReadonlyError(_ESCAPE)
+        return target
     return _resolve_followed(root_real, user_path)
 
 
 def _prepare_root(root: Path) -> Path:
     real = _root_real(root)
+    if is_denied_path(real):
+        raise ReadonlyError(_ESCAPE)
     if not real.exists():
         raise ReadonlyError(_NOT_FOUND)
     if not real.is_dir():
@@ -297,6 +303,8 @@ def _resolve_followed(root_real: Path, user_path: str) -> Path:
         real.relative_to(root_real)
     except ValueError as exc:
         raise ReadonlyError(_ESCAPE) from exc
+    if is_denied_path(real):
+        raise ReadonlyError(_ESCAPE)
     return real
 
 
@@ -913,7 +921,7 @@ def _iter_search_files(root_real: Path, start: Path) -> Iterator[Path]:
         kept: list[str] = []
         for dirname in dirnames:
             child = Path(dirpath) / dirname
-            if child.is_symlink() or _unsafe_to_descend(child):
+            if child.is_symlink() or _unsafe_to_descend(child) or is_denied_path(child):
                 continue
             try:
                 _resolve_followed(root_real, str(child))
@@ -923,7 +931,7 @@ def _iter_search_files(root_real: Path, start: Path) -> Iterator[Path]:
         dirnames[:] = kept
         for name in filenames:
             child = Path(dirpath) / name
-            if child.is_symlink() or _path_is_reparse(child) or not child.is_file():
+            if child.is_symlink() or _path_is_reparse(child) or not child.is_file() or is_denied_path(child):
                 continue
             try:
                 _resolve_followed(root_real, str(child))

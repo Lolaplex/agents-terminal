@@ -22,13 +22,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def _procs_root() -> Path:
-    raw = os.environ.get("AGENTS_TERMINAL_PROCS_DIR", "").strip()
-    if raw:
-        return Path(raw).expanduser().resolve()
-    from agents_workspace import Workspace
+from .proc import _procs_roots
 
-    return Workspace.from_env().dir / "procs"
+
+def _procs_root() -> Path:
+    return _procs_roots()[0]
+
+
+def _proc_dir(proc_id: str) -> Path:
+    primary, legacy = _procs_roots()
+    pdir = primary / proc_id
+    if not (pdir / "meta.json").is_file() and legacy is not None:
+        legacy_dir = legacy / proc_id
+        if (legacy_dir / "meta.json").is_file():
+            return legacy_dir
+    return pdir
 
 
 def _read_json(path: Path) -> dict:
@@ -85,7 +93,23 @@ def _pty_send(fd: int):
     return send
 
 
-def _supervise_pty(pdir: Path, meta: dict, argv: list[str], cwd: str | None) -> int:
+_NOTIFY_ENV_KEYS = ("AGENTS_TERMINAL_NOTIFY_URL", "AGENTS_TERMINAL_NOTIFY_SECRET")
+
+
+def _child_env() -> dict[str, str]:
+    """Child process env stripped of supervisor-only notification credentials."""
+    return {k: v for k, v in os.environ.items() if k not in _NOTIFY_ENV_KEYS}
+
+
+def _supervise_pty(
+    pdir: Path,
+    meta: dict,
+    argv: list[str],
+    cwd: str | None,
+    *,
+    notify_url: str = "",
+    notify_secret: str = "",
+) -> int:
     """Run the child on a fresh pty. POSIX only; Windows refuses."""
     if sys.platform == "win32":
         _write_json(
@@ -105,6 +129,7 @@ def _supervise_pty(pdir: Path, meta: dict, argv: list[str], cwd: str | None) -> 
         child = subprocess.Popen(
             argv,
             cwd=cwd,
+            env=_child_env(),
             stdin=slave,
             stdout=slave,
             stderr=slave,
@@ -157,21 +182,37 @@ def _supervise_pty(pdir: Path, meta: dict, argv: list[str], cwd: str | None) -> 
     os.close(master)
     code = int(child.wait())
     _write_json(pdir / "exit.json", {"code": code, "finished": _now()})
-    _notify_exit(pdir, str(meta.get("id") or pdir.name), argv, code)
+    _notify_exit(
+        pdir,
+        str(meta.get("id") or pdir.name),
+        argv,
+        code,
+        notify_url=notify_url,
+        notify_secret=notify_secret,
+    )
     return code
 
 
 def supervise(proc_id: str) -> int:
-    pdir = _procs_root() / proc_id
+    pdir = _proc_dir(proc_id)
     meta = _read_json(pdir / "meta.json")
     argv = [str(a) for a in meta.get("argv") or [] if str(a)]
     cwd = str(meta.get("cwd") or "") or None
+    notify_url = os.environ.get("AGENTS_TERMINAL_NOTIFY_URL", "").strip()
+    notify_secret = os.environ.get("AGENTS_TERMINAL_NOTIFY_SECRET", "").strip()
     if not argv:
         _write_json(pdir / "exit.json", {"code": 2, "finished": _now(), "error": "empty argv"})
         return 2
 
     if meta.get("pty"):
-        return _supervise_pty(pdir, meta, argv, cwd)
+        return _supervise_pty(
+            pdir,
+            meta,
+            argv,
+            cwd,
+            notify_url=notify_url,
+            notify_secret=notify_secret,
+        )
 
     out_f = pdir / "out.log"
     err_f = pdir / "err.log"
@@ -189,6 +230,7 @@ def supervise(proc_id: str) -> int:
                 child = subprocess.Popen(
                     argv,
                     cwd=cwd,
+                    env=_child_env(),
                     stdin=subprocess.PIPE,
                     stdout=out,
                     stderr=err,
@@ -215,7 +257,14 @@ def supervise(proc_id: str) -> int:
             pdir / "exit.json",
             {"code": code, "finished": _now()},
         )
-        _notify_exit(pdir, proc_id, argv, code)
+        _notify_exit(
+            pdir,
+            proc_id,
+            argv,
+            code,
+            notify_url=notify_url,
+            notify_secret=notify_secret,
+        )
         return code
     finally:
         if kernel32 and job:
@@ -226,14 +275,26 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _notify_exit(pdir: Path, proc_id: str, argv: list, code: int) -> None:
+def _notify_exit(
+    pdir: Path,
+    proc_id: str,
+    argv: list,
+    code: int,
+    *,
+    notify_url: str | None = None,
+    notify_secret: str | None = None,
+) -> None:
     """POST the exit + log tail to AGENTS_TERMINAL_NOTIFY_URL.
 
     The relay `/v1/alert` (or any webhook) receives one JSON body; the agent
     gets a pushed message instead of burning model calls on idle `proc poll`
     loops. Failures land in exit.json `notify_error`; they never fail the proc.
     """
-    url = os.environ.get("AGENTS_TERMINAL_NOTIFY_URL", "").strip()
+    url = (
+        os.environ.get("AGENTS_TERMINAL_NOTIFY_URL", "")
+        if notify_url is None
+        else notify_url
+    ).strip()
     if not url:
         return
     from .exitinfo import explain_exit
@@ -250,7 +311,11 @@ def _notify_exit(pdir: Path, proc_id: str, argv: list, code: int) -> None:
         "stdout_tail": tail,
         "stderr_tail": err_tail,
     }
-    secret = os.environ.get("AGENTS_TERMINAL_NOTIFY_SECRET", "").strip()
+    secret = (
+        os.environ.get("AGENTS_TERMINAL_NOTIFY_SECRET", "")
+        if notify_secret is None
+        else notify_secret
+    ).strip()
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if secret:
         headers["X-Relay-Secret"] = secret

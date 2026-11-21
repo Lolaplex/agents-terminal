@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import TypedDict
 
+from .policy import is_denied_path
 from .readonly import (
     _BINARY,
     _ESCAPE,
@@ -196,7 +197,10 @@ def _write_target(root: Path, user_path: str) -> tuple[Path, Path]:
         parent_real.relative_to(root_real)
     except ValueError as exc:
         raise ReadonlyError(_ESCAPE) from exc
-    return root_real, parent_real / name
+    target = parent_real / name
+    if is_denied_path(target, follow_symlinks=False) or is_denied_path(target, follow_symlinks=True):
+        raise ReadonlyError(_ESCAPE)
+    return root_real, target
 
 
 def _existing_bytes(root_real: Path, target: Path, *, create_only: bool) -> bytes | None:

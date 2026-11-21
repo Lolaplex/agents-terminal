@@ -23,14 +23,46 @@ class TestPolicy(unittest.TestCase):
         pol = Policy(net=False)
         self.assertEqual(pol.check_request(read=False, write=False, net=True), "net denied (no driver)")
 
-    def test_filtered_env_includes_github_token(self):
+    def test_filtered_env_strips_github_token_by_default_and_allows_opt_in(self):
         import os
         from unittest.mock import patch
-        with patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_secret", "RANDOM_VAR": "hidden"}, clear=True):
+        with patch.dict(
+            os.environ,
+            {"GITHUB_TOKEN": "ghp_secret", "GH_TOKEN": "gho_secret", "RANDOM_VAR": "hidden"},
+            clear=True,
+        ):
+            pol = Policy.load()
+            env = pol.filtered_env()
+            self.assertNotIn("GITHUB_TOKEN", env)
+            self.assertNotIn("GH_TOKEN", env)
+            self.assertNotIn("RANDOM_VAR", env)
+
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_TOKEN": "ghp_secret",
+                "GH_TOKEN": "gho_secret",
+                "AGENTS_TERMINAL_ALLOW_GH_TOKEN": "1",
+            },
+            clear=True,
+        ):
             pol = Policy.load()
             env = pol.filtered_env()
             self.assertEqual(env.get("GITHUB_TOKEN"), "ghp_secret")
-            self.assertNotIn("RANDOM_VAR", env)
+            self.assertEqual(env.get("GH_TOKEN"), "gho_secret")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pfile = Path(tmp) / "policy.json"
+            pfile.write_text(json.dumps({"env_allow": ["PATH", "GH_TOKEN"]}), encoding="utf-8")
+            with patch.dict(
+                os.environ,
+                {"GITHUB_TOKEN": "ghp_secret", "GH_TOKEN": "gho_secret"},
+                clear=True,
+            ):
+                pol = Policy.load(str(pfile))
+                env = pol.filtered_env()
+                self.assertEqual(env.get("GH_TOKEN"), "gho_secret")
+                self.assertNotIn("GITHUB_TOKEN", env)
 
     def test_filtered_env_extra_env(self):
         import os
@@ -226,13 +258,108 @@ class TestWorkspaceLock(unittest.TestCase):
             # legacy ~/.agents is a foreign tree under a tmp host: fully denied
             self.assertEqual(refuse_workspace(str(self.root), ["python", str(dot_skill)]), "path escapes workspace root")
             self.assertEqual(refuse_workspace(str(self.root), ["python", str(dot_key)]), "path escapes workspace root")
-            # host infra under the resolved host stays reachable
+            # host keys/secrets/control-plane under the resolved host MUST be denied
             host_key = home / "keys" / "host.ed25519"
             host_key.parent.mkdir(exist_ok=True)
             host_key.write_text("k", encoding="utf-8")
-            self.assertIsNone(refuse_workspace(str(self.root), ["python", str(host_key)]))
+            self.assertEqual(
+                refuse_workspace(str(self.root), ["python", str(host_key)]),
+                "path escapes workspace root",
+            )
             leaked = run_argv(self._read(str(self.secret)), policy=pol)
             self.assertEqual(leaked.denied, "path escapes workspace root")
+
+    def test_denied_paths_block_secrets_and_control_plane_before_allowed_roots(self) -> None:
+        from agents_workspace import Host
+        from agents_terminal.mutate import edit_file, write_file
+        from agents_terminal.policy import refuse_workspace
+        from agents_terminal.readonly import ReadonlyError, grep_files, read_file, stat_path
+
+        host_dir = self.tmp / "host"
+        with self._env(True, AGENTS_HOST_DIR=str(host_dir)):
+            host = Host.from_env()
+            ws = host.create("demo")
+        with self._env(
+            True,
+            AGENTS_HOST_DIR=str(host_dir),
+            AGENTS_WORKSPACE="demo",
+            AGENTS_WORKSPACE_ALLOW=f"{host.dir}{os.pathsep}{ws.dir}",
+        ):
+            ws.secrets.write_text('{"API_KEY":"ws-secret"}\n', encoding="utf-8")
+            ws.members.write_text('{"members":[]}\n', encoding="utf-8")
+            host.secrets.write_text('{"API_KEY":"host-secret"}\n', encoding="utf-8")
+            (host.dir / "secrets.bak").write_text("backup-secret\n", encoding="utf-8")
+            host.mcp_json.write_text('{"mcpServers":{}}\n', encoding="utf-8")
+            host.agents_json.write_text('{"node_id":"n1"}\n', encoding="utf-8")
+            (ws.dir / "notes.txt").write_text("safe note\n", encoding="utf-8")
+
+            blocked = [
+                ws.secrets,
+                ws.members,
+                host.secrets,
+                host.dir / "secrets.bak",
+                host.mcp_json,
+                host.agents_json,
+            ]
+            for target in blocked:
+                self.assertEqual(
+                    refuse_workspace(str(ws.workdir), ["python", str(target)]),
+                    "path escapes workspace root",
+                    target,
+                )
+
+            for base, rel in (
+                (ws.dir, "secrets.json"),
+                (ws.dir, "members.json"),
+                (host.dir, "secrets.json"),
+                (host.dir, "secrets.bak"),
+                (host.dir, "mcp.json"),
+                (host.dir, "agents.json"),
+            ):
+                with self.assertRaises(ReadonlyError) as ctx:
+                    read_file(base, rel)
+                self.assertEqual(ctx.exception.message, "path escapes workspace root")
+                with self.assertRaises(ReadonlyError) as ctx:
+                    stat_path(base, rel)
+                self.assertEqual(ctx.exception.message, "path escapes workspace root")
+                with self.assertRaises(ReadonlyError) as ctx:
+                    write_file(base, rel, "tamper")
+                self.assertEqual(ctx.exception.message, "path escapes workspace root")
+                with self.assertRaises(ReadonlyError) as ctx:
+                    edit_file(base, rel, old="a", new="b")
+                self.assertEqual(ctx.exception.message, "path escapes workspace root")
+
+            hits = grep_files(ws.dir, "secret", ".")
+            self.assertEqual(hits["matches"], [])
+
+    def test_standalone_denied_fallback_without_agents_workspace(self) -> None:
+        from agents_terminal import policy as pol_mod
+
+        host_dir = self.tmp / "host_standalone"
+        (host_dir / "keys").mkdir(parents=True)
+        (host_dir / "keys" / "k.ed25519").write_text("k", encoding="utf-8")
+        (host_dir / "secrets.json").write_text("{}", encoding="utf-8")
+        (host_dir / "secrets").mkdir()
+        (host_dir / "secrets" / "tok").write_text("t", encoding="utf-8")
+        (host_dir / "mcp.json").write_text("{}", encoding="utf-8")
+        (host_dir / "agents.json").write_text("{}", encoding="utf-8")
+
+        with self._env(True, AGENTS_HOST_DIR=str(host_dir)), \
+             patch.object(pol_mod, "Host", None), \
+             patch.object(pol_mod, "Workspace", None), \
+             patch.object(pol_mod, "allowed_roots", None), \
+             patch.object(pol_mod, "denied_paths", None):
+            for blocked in (
+                host_dir / "keys" / "k.ed25519",
+                host_dir / "secrets.json",
+                host_dir / "secrets" / "tok",
+                host_dir / "mcp.json",
+                host_dir / "agents.json",
+            ):
+                self.assertEqual(
+                    pol_mod.refuse_workspace(str(self.root), ["python", str(blocked)]),
+                    "path escapes workspace root",
+                )
 
     def test_blank_unlocked(self) -> None:
         pol = Policy(cwd=str(self.root))

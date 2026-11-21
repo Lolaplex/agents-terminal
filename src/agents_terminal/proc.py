@@ -6,7 +6,7 @@ command with ``shell=False`` — argv never enters a batch file or shell line,
 so metacharacters in arguments cannot escape into another command.
 
 State lives in per-proc dirs under ``AGENTS_TERMINAL_PROCS_DIR`` (default:
-``<workspace>/procs``):
+``<workspace>/run/procs``; 1-release fallback read for legacy ``<workspace>/procs``):
 
     procs/<id>/meta.json   id, argv, supervisor pid, child_pid, cwd, created
     procs/<id>/out.log     stdout
@@ -37,20 +37,56 @@ from .exitinfo import explain_exit
 from .policy import Policy
 
 
-def _procs_root() -> Path:
+def _standalone_ws_dir() -> Path:
+    raw_ws = os.environ.get("AGENTS_WORKSPACE_ROOT", "").strip()
+    if raw_ws:
+        return Path(raw_ws).expanduser().resolve()
+    raw_host = os.environ.get("AGENTS_HOST_DIR", "").strip()
+    host_dir = (
+        Path(raw_host).expanduser().resolve()
+        if raw_host
+        else (Path.home() / ".agents").resolve()
+    )
+    ws_id = os.environ.get("AGENTS_WORKSPACE", "").strip()
+    if ws_id:
+        return host_dir / "workspaces" / ws_id
+    if (host_dir / "workspaces").is_dir() or not any(
+        (host_dir / marker).exists()
+        for marker in ("memory", "skills", "procs", "workspace.json")
+    ):
+        return host_dir / "workspaces" / "default"
+    return host_dir
+
+
+def _procs_roots() -> tuple[Path, Path | None]:
+    """Return ``(primary_procs_dir, legacy_procs_dir_or_none)``."""
     raw = os.environ.get("AGENTS_TERMINAL_PROCS_DIR", "").strip()
     if raw:
-        return Path(raw).expanduser().resolve()
-    from agents_workspace import Workspace
+        return Path(raw).expanduser().resolve(), None
+    try:
+        from agents_workspace import Workspace
+    except ImportError:
+        ws_dir = _standalone_ws_dir()
+        return ws_dir / "run" / "procs", ws_dir / "procs"
+    ws = Workspace.from_env()
+    primary = getattr(ws, "procs", None) or (ws.dir / "run" / "procs")
+    legacy = ws.dir / "procs"
+    return primary, (legacy if legacy != primary else None)
 
-    return Workspace.from_env().dir / "procs"
+
+def _procs_root() -> Path:
+    return _procs_roots()[0]
 
 
-def _proc_dir(proc_id: str) -> Path:
+def _safe_proc_id(proc_id: str) -> str:
     safe = "".join(ch for ch in proc_id if ch.isalnum() or ch in ("-", "_"))
     if not safe or safe != proc_id:
         raise ProcError("invalid process id", code=2)
-    return _procs_root() / safe
+    return safe
+
+
+def _proc_dir(proc_id: str) -> Path:
+    return _procs_root() / _safe_proc_id(proc_id)
 
 
 class ProcError(Exception):
@@ -256,20 +292,33 @@ def bg_spawn(argv: list[str], *, policy: Policy | None = None, pty: bool = False
 
 
 def proc_list() -> dict[str, Any]:
-    root = _procs_root()
+    primary, legacy = _procs_roots()
     rows = []
-    if root.is_dir():
+    seen: set[str] = set()
+    for root in (primary, legacy):
+        if root is None or not root.is_dir():
+            continue
         for child in sorted(root.iterdir()):
+            if child.name in seen:
+                continue
             if child.is_dir() and (child / "meta.json").is_file():
+                seen.add(child.name)
                 rows.append(_proc_state(child))
+    rows.sort(key=lambda r: r["id"])
     return {"processes": rows}
 
 
 def _load(proc_id: str) -> Path:
-    pdir = _proc_dir(proc_id)
-    if not (pdir / "meta.json").is_file():
-        raise ProcError("unknown process id", code=2)
-    return pdir
+    safe = _safe_proc_id(proc_id)
+    primary, legacy = _procs_roots()
+    pdir = primary / safe
+    if (pdir / "meta.json").is_file():
+        return pdir
+    if legacy is not None:
+        legacy_dir = legacy / safe
+        if (legacy_dir / "meta.json").is_file():
+            return legacy_dir
+    raise ProcError("unknown process id", code=2)
 
 
 def proc_poll(proc_id: str) -> dict[str, Any]:
