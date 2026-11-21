@@ -22,13 +22,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def _procs_root() -> Path:
-    raw = os.environ.get("AGENTS_TERMINAL_PROCS_DIR", "").strip()
-    if raw:
-        return Path(raw).expanduser().resolve()
-    from agents_workspace import Workspace
+from .proc import _procs_roots
 
-    return Workspace.from_env().dir / "procs"
+
+def _procs_root() -> Path:
+    return _procs_roots()[0]
+
+
+def _proc_dir(proc_id: str) -> Path:
+    primary, legacy = _procs_roots()
+    pdir = primary / proc_id
+    if not (pdir / "meta.json").is_file() and legacy is not None:
+        legacy_dir = legacy / proc_id
+        if (legacy_dir / "meta.json").is_file():
+            return legacy_dir
+    return pdir
 
 
 def _read_json(path: Path) -> dict:
@@ -186,7 +194,7 @@ def _supervise_pty(
 
 
 def supervise(proc_id: str) -> int:
-    pdir = _procs_root() / proc_id
+    pdir = _proc_dir(proc_id)
     meta = _read_json(pdir / "meta.json")
     argv = [str(a) for a in meta.get("argv") or [] if str(a)]
     cwd = str(meta.get("cwd") or "") or None
