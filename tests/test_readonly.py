@@ -460,7 +460,7 @@ class TestCli(TestCase):
         self.root.mkdir()
         (self.root / "ok.txt").write_text("one\ntwo\n", encoding="utf-8")
         self.env = {
-            "AGENTS_WORKSPACE_DIR": str(self.root),
+            "AGENTS_WORKDIR": str(self.root),
             "AGENTS_TERMINAL_POLICY": "",
             "AGENTS_TERMINAL_DRIVER": "subprocess",
             "AGENTS_NO_UPDATE_CHECK": "1",
@@ -516,7 +516,7 @@ class TestCli(TestCase):
         self.assertEqual(_snapshot(self.root), before)
         self.assertEqual(outside.read_text(encoding="utf-8"), _SECRET)
         missing = self.root.parent / "missing-root"
-        self.env["AGENTS_WORKSPACE_DIR"] = str(missing)
+        self.env["AGENTS_WORKDIR"] = str(missing)
         code, out, err = self._run(["list"])
         self.assertEqual(code, 1)
         self.assertEqual(out, "")
@@ -679,18 +679,26 @@ class TestFailClosed(TestCase):
     def test_stat_uses_dir_fd_and_rejects_escapes(self) -> None:
         seen: list[object] = []
         real_stat = os.stat
+        real_lstat = os.lstat
 
         def wrap_stat(path, *args, **kwargs):
             if kwargs.get("dir_fd") is not None and kwargs.get("follow_symlinks") is False:
                 seen.append(kwargs.get("dir_fd"))
             return real_stat(path, *args, **kwargs)
 
-        # os.stat is what supports_dir_fd advertises. The wrapper must stay in that set
-        # or the capability check treats dir_fd as unavailable and uses the fallback.
+        def wrap_lstat(path, *args, **kwargs):
+            if kwargs.get("dir_fd") is not None:
+                seen.append(kwargs.get("dir_fd"))
+            return real_lstat(path, *args, **kwargs)
+
+        # os.stat / os.lstat are what supports_dir_fd advertises. Wrappers must stay in
+        # that set or the capability check treats dir_fd as unavailable and uses fallback.
         advertised = set(os.supports_dir_fd)
         advertised.add(wrap_stat)
+        advertised.add(wrap_lstat)
         with (
             mock.patch.object(os, "stat", wrap_stat),
+            mock.patch.object(os, "lstat", wrap_lstat),
             mock.patch.object(os, "supports_dir_fd", advertised),
         ):
             described = stat_path(self.root, "ok.txt")
