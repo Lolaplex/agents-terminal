@@ -227,6 +227,9 @@ def _denied_spec() -> tuple[Path | None, list[Path]]:
         host_dir / "agents.json",
         host_dir / "users.json",
         host_dir / "approval-allowlist.json",
+        host_dir / "run" / "approvals",
+        host_dir / "logs",
+        host_dir / "clients",
     ]
     raw_ws = os.environ.get("AGENTS_WORKSPACE_ROOT", "").strip()
     if raw_ws:

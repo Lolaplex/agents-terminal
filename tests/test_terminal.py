@@ -291,6 +291,15 @@ class TestWorkspaceLock(unittest.TestCase):
             (host.dir / "secrets.bak").write_text("backup-secret\n", encoding="utf-8")
             host.mcp_json.write_text('{"mcpServers":{}}\n', encoding="utf-8")
             host.agents_json.write_text('{"node_id":"n1"}\n', encoding="utf-8")
+            (host.run / "approvals").mkdir(parents=True, exist_ok=True)
+            ap_file = host.run / "approvals" / "a1.json"
+            ap_file.write_text('{"status":"pending"}\n', encoding="utf-8")
+            host.logs.mkdir(parents=True, exist_ok=True)
+            log_file = host.logs / "serve.log"
+            log_file.write_text("klanker serve -> http://127.0.0.1:8787/?token=t\n", encoding="utf-8")
+            (host.clients / "shell").mkdir(parents=True, exist_ok=True)
+            prefs_file = host.clients / "shell" / "prefs.json"
+            prefs_file.write_text('{"secret":"s"}\n', encoding="utf-8")
             (ws.dir / "notes.txt").write_text("safe note\n", encoding="utf-8")
 
             blocked = [
@@ -300,6 +309,9 @@ class TestWorkspaceLock(unittest.TestCase):
                 host.dir / "secrets.bak",
                 host.mcp_json,
                 host.agents_json,
+                ap_file,
+                log_file,
+                prefs_file,
             ]
             for target in blocked:
                 self.assertEqual(
@@ -315,6 +327,9 @@ class TestWorkspaceLock(unittest.TestCase):
                 (host.dir, "secrets.bak"),
                 (host.dir, "mcp.json"),
                 (host.dir, "agents.json"),
+                (host.dir, "run/approvals/a1.json"),
+                (host.dir, "logs/serve.log"),
+                (host.dir, "clients/shell/prefs.json"),
             ):
                 with self.assertRaises(ReadonlyError) as ctx:
                     read_file(base, rel)
@@ -343,6 +358,12 @@ class TestWorkspaceLock(unittest.TestCase):
         (host_dir / "secrets" / "tok").write_text("t", encoding="utf-8")
         (host_dir / "mcp.json").write_text("{}", encoding="utf-8")
         (host_dir / "agents.json").write_text("{}", encoding="utf-8")
+        (host_dir / "run" / "approvals").mkdir(parents=True)
+        (host_dir / "run" / "approvals" / "a1.json").write_text("{}", encoding="utf-8")
+        (host_dir / "logs").mkdir(parents=True)
+        (host_dir / "logs" / "serve.log").write_text("x", encoding="utf-8")
+        (host_dir / "clients").mkdir(parents=True)
+        (host_dir / "clients" / "prefs.json").write_text("{}", encoding="utf-8")
 
         with self._env(True, AGENTS_HOST_DIR=str(host_dir)), \
              patch.object(pol_mod, "Host", None), \
@@ -355,6 +376,9 @@ class TestWorkspaceLock(unittest.TestCase):
                 host_dir / "secrets" / "tok",
                 host_dir / "mcp.json",
                 host_dir / "agents.json",
+                host_dir / "run" / "approvals" / "a1.json",
+                host_dir / "logs" / "serve.log",
+                host_dir / "clients" / "prefs.json",
             ):
                 self.assertEqual(
                     pol_mod.refuse_workspace(str(self.root), ["python", str(blocked)]),
