@@ -41,8 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lock internal roots now come from the resolver: workdir + the active workspace dir + host infra (keys, secrets, run, cache, logs, clients, agents.json, mcp.json, users.json). `~/.agents` is no longer implicitly allowed; under a different host it counts as a foreign tree and is denied.
 - Update-check cache lives at `<host>/cache/updates/`., separated by the OS path separator.
 
-## [0.0.6] - 2026-11-08
-
 ### Added
 - Read-only commands `list`, `read`, `grep` (`search`), and `stat`. They observe the workspace root and cannot create, modify, delete, or spawn a process. `read` accepts `--offset` (1-based line) and `--limit`.
 - `write PATH [--stdin | --content TEXT] [--create-only] [--json]`. Writes UTF-8 text inside the workspace root, creates missing parent directories inside the root, and writes atomically with `os.replace`. An existing file keeps its line endings; a new file uses LF. A symlink, directory, or binary target is refused.
@@ -87,8 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dual drivers: `subprocess` fallback and `openshell` container isolation.
 - Structured JSON API (`--help-json`) and Cordis `call_job mcp.terminal`.
 
-[Unreleased]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.6...HEAD
-[0.0.6]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.5...v0.0.6
+[Unreleased]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.5...HEAD
 [0.0.5]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/Lolaplex/agents-terminal/compare/v0.0.2...v0.0.3
